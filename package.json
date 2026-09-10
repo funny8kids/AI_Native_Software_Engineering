@@ -1,0 +1,12 @@
+{
+  "name": "ai-native-software-engineering",
+  "version": "1.0.0",
+  "description": "AI Native Software Engineering Documentation",
+  "scripts": {
+    "docs": "docsify serve docs",
+    "build": "docsify build docs"
+  },
+  "devDependencies": {
+    "docsify-cli": "^4.4.4"
+  }
+}
