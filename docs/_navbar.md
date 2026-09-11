@@ -1,2 +1,5 @@
-- [主页](/)
-- [GitHub](https://github.com)
+- [🏠 主页](/)
+- [📖 全书导读](/manuscript/README.md)
+- [🏗 地基文档](/manuscript/00-案例时间线.md)
+- [🔍 搜索](?q=)
+- [🐙 GitHub](https://github.com)

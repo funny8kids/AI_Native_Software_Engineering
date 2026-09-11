@@ -1,29 +1,88 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>AI Native Software Engineering</title>
+  <title>AI 原生软件工程 · AI Native Software Engineering</title>
   <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-  <meta name="description" content="AI Native Software Engineering Documentation">
+  <meta name="description" content="《AI 原生软件工程》—— 当 AI 自己兜不住的时候，组织如何接管。四个真实案例，一套治理方法论。">
+  <meta name="keywords" content="AI, 软件工程, AI 原生, AI 治理, 人在回路, 留缝留痕, 契约先行, 案例">
+  <meta name="author" content="AI Native Software Engineering">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+
+  <!-- Fonts: Inter (UI), JetBrains Mono (code), Noto Sans/Serif SC (Chinese) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Base Docsify theme (loaded for layout scaffolding, then overridden) -->
   <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
+  <!-- Custom theme override -->
+  <link rel="stylesheet" href="theme.css">
 </head>
 <body>
-  <div id="app">Loading...</div>
+  <div id="app">Loading…</div>
+
+  <!-- Loading splash -->
+  <noscript>请启用 JavaScript 以浏览本文档。</noscript>
+
   <script>
     window.$docsify = {
-      name: 'AI Native Software Engineering',
+      name: '《AI 原生软件工程》',
+      nameLink: '/',
       repo: '',
       loadSidebar: true,
       loadNavbar: true,
       coverpage: true,
       subMaxLevel: 2,
-      search: 'auto',
+      maxLevel: 3,
+      search: {
+        maxAge: 86400000,
+        paths: 'auto',
+        placeholder: '搜索全书内容…',
+        noData: '没有找到匹配结果',
+        depth: 3,
+      },
+      auto2top: true,
+      relativePath: false,
+      themeColor: '#58a6ff',
+      formatUpdated: '{YYYY}-{MM}-{DD}',
+      pagination: {
+        previousText: '上一章',
+        nextText: '下一章',
+        crossChapter: true,
+      },
+      plugins: [
+        function pageFooter(hook) {
+          var footer = [
+            '<hr/>',
+            '<footer style="text-align:center;color:#6e7681;font-size:0.85em;padding:20px 0 40px;">',
+            '<p>《AI 原生软件工程》 · 当 AI 自己兜不住的时候，组织如何接管</p>',
+            '<p>AI 做可能，人做选择，人做负责。</p>',
+            '</footer>',
+          ].join('');
+          hook.afterEach(function (html) {
+            return html + footer;
+          });
+        },
+      ],
     }
   </script>
+
   <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
   <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/pagination.min.js"></script>
+
+  <!-- Prism language support -->
   <script src="//cdn.jsdelivr.net/npm/prismjs/components/prism-python.min.js"></script>
   <script src="//cdn.jsdelivr.net/npm/prismjs/components/prism-bash.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs/components/prism-go.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs/components/prism-rust.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs/components/prism-java.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs/components/prism-yaml.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs/components/prism-json.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs/components/prism-sql.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs/components/prism-diff.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs/components/prism-typescript.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/prismjs/components/prism-docker.min.js"></script>
 </body>
 </html>
