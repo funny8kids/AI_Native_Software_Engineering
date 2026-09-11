@@ -9,10 +9,17 @@
   <meta name="author" content="AI Native Software Engineering">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
 
-  <!-- Fonts: Inter (UI), JetBrains Mono (code), Noto Sans/Serif SC (Chinese) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <!-- Fonts: async-loaded so they never block rendering (critical for CN access) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+  <!-- media="print" + onload trick: non-blocking, falls back to system fonts if CDN is unreachable -->
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600;700&display=swap"
+        media="print" onload="this.media='all'">
+  <noscript>
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600;700&display=swap">
+  </noscript>
 
   <!-- Base Docsify theme (loaded for layout scaffolding, then overridden) -->
   <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
@@ -21,8 +28,6 @@
 </head>
 <body>
   <div id="app">Loading…</div>
-
-  <!-- Loading splash -->
   <noscript>请启用 JavaScript 以浏览本文档。</noscript>
 
   <script>
