@@ -6,6 +6,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
   <meta name="description" content="《AI 原生软件工程》—— 当 AI 自己兜不住的时候，组织如何接管。四个真实案例，一套治理方法论。">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+  <meta name="theme-color" content="#4f46e5">
 
   <!-- All assets are self-hosted: zero external CDN dependency -->
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -30,6 +31,7 @@
       loadSidebar: true,
       loadNavbar: true,
       coverpage: true,
+      onlyCover: false,
       alias: {
         '/manuscript/.*_sidebar.md': '/_sidebar.md',
         '/manuscript/.*_navbar.md': '/_navbar.md',
@@ -47,11 +49,11 @@
       },
       auto2top: true,
       relativePath: false,
-      themeColor: '#58a6ff',
+      themeColor: '#4f46e5',
       formatUpdated: '{YYYY}-{MM}-{DD}',
       pagination: {
-        previousText: '上一篇',
-        nextText: '下一篇',
+        previousText: '上一章',
+        nextText: '下一章',
         crossChapter: true,
       },
       plugins: [
@@ -67,6 +69,83 @@
             return html + footer;
           });
         },
+        // Self-hosted Mermaid: convert ```mermaid fences after Docsify render
+        function mermaidPlugin(hook, vm) {
+          var mermaidNodes = [];
+
+          function initMermaid() {
+            if (typeof mermaid === 'undefined') return;
+            mermaid.initialize({
+              startOnLoad: false,
+              securityLevel: 'loose',
+              theme: 'neutral',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+              flowchart: { curve: 'basis', htmlLabels: true },
+              themeVariables: {
+                primaryColor: '#eef2ff',
+                primaryTextColor: '#1a1d23',
+                primaryBorderColor: '#4f46e5',
+                lineColor: '#6b7280',
+                secondaryColor: '#f7f8fa',
+                tertiaryColor: '#ffffff',
+                fontSize: '14px',
+              },
+            });
+          }
+
+          hook.doneEach(function () {
+            if (typeof mermaid === 'undefined') return;
+            initMermaid();
+
+            // Docsify wraps unrendered mermaid in <code class="lang-mermaid"> inside <pre>
+            var codes = document.querySelectorAll(
+              '.markdown-section pre[data-lang="mermaid"] code, .markdown-section code.lang-mermaid, .markdown-section pre > code.language-mermaid'
+            );
+
+            // Fallback: any code whose text looks like mermaid diagram source
+            if (!codes.length) {
+              var all = document.querySelectorAll('.markdown-section code');
+              all.forEach(function (el) {
+                var t = el.textContent || '';
+                if (/^(flowchart|graph|sequenceDiagram|stateDiagram|erDiagram|gantt|mindmap|timeline|classDiagram|pie)\b/.test(t.trim())) {
+                  el.classList.add('lang-mermaid');
+                  codes = document.querySelectorAll('.markdown-section code.lang-mermaid');
+                }
+              });
+            }
+
+            var i = 0;
+            codes.forEach(function (code) {
+              var pre = code.closest('pre');
+              var source = code.textContent;
+              if (!source || !source.trim()) return;
+              var id = 'mermaid-' + Date.now() + '-' + (i++);
+              var wrapper = document.createElement('div');
+              wrapper.className = 'mermaid-block';
+              var label = document.createElement('div');
+              label.className = 'mermaid-label';
+              wrapper.appendChild(label);
+              var host = document.createElement('div');
+              host.className = 'mermaid';
+              host.id = id;
+              host.textContent = source;
+              wrapper.appendChild(host);
+              if (pre && pre.parentNode) {
+                pre.parentNode.replaceChild(wrapper, pre);
+              }
+              mermaidNodes.push(host);
+            });
+
+            if (mermaidNodes.length) {
+              try {
+                mermaid.run({ nodes: mermaidNodes });
+              } catch (e) {
+                console.warn('mermaid render failed', e);
+              }
+              mermaidNodes = [];
+            }
+          });
+        },
       ],
     }
   </script>
@@ -75,6 +154,7 @@
   <script src="vendor/docsify.min.js"></script>
   <script src="vendor/search.min.js"></script>
   <script src="vendor/pagination.min.js"></script>
+  <script src="vendor/mermaid.min.js"></script>
 
   <!-- Self-hosted Prism syntax highlighting -->
   <script src="vendor/prism-core.min.js"></script>

@@ -3,6 +3,8 @@
 
 - **《AI 原生软件工程》书稿**
   - [总览](/manuscript/README.md)
+  - [这本书是什么](/manuscript/03-这本书是什么.md)
+  - [90 天总路线图](/manuscript/04-90天总路线图.md)
   - 地基（四案例并列）
     - [四案例时间线](/manuscript/00-案例时间线.md)
     - [四案例角色设定卡](/manuscript/01-角色设定卡.md)
@@ -41,14 +43,26 @@
     - [第 25 章 · 文档 ADR/RFC/设计令牌治理](/manuscript/38-第25章-文档ADR-RFC-设计令牌治理.md)
     - [第 26 章 · 组织治理](/manuscript/13-第26章-组织治理.md)
     - [第 27 章 · 契约治理](/manuscript/14-第27章-契约治理.md)
-  - 第八部分 · 四案例（等权平行）
+  - 第八部分 · 四案例
     - [第 28 章 · 灰度发布](/manuscript/15-第28章-灰度发布.md)
     - [案例一 · 300 人电商平台](/manuscript/44-案例一-300人电商平台.md)
-    - [案例二 · 海星交易所（2300 人）](/manuscript/45-案例二-海星交易所.md)
-    - [案例三 · 暗流资本（32 人 Web3 量化）](/manuscript/46-案例三-暗流资本.md)
-    - [案例四 · 守夜人科技（10 人智能体初创）](/manuscript/47-案例四-守夜人科技.md)
+    - [案例二 · 海星交易所](/manuscript/45-案例二-海星交易所.md)
+    - [案例三 · 暗流资本](/manuscript/46-案例三-暗流资本.md)
+    - [案例四 · 守夜人科技](/manuscript/47-案例四-守夜人科技.md)
   - 第九部分 · 交叉收束
     - [第 33 章 · 四案例交叉启示](/manuscript/48-第33章-四案例交叉启示.md)
   - 配套附录
-    - [附录 A · 提示词库骨架（50 条）](/manuscript/39-附录A-提示词库骨架.md)
+    - [附录 A · 提示词库骨架](/manuscript/39-附录A-提示词库骨架.md)
     - [附录 I · 契约治理规范模板](/manuscript/40-附录I-契约治理规范模板.md)
+    - [附录 J · AI 系统工程最小面](/manuscript/41-附录J-AI系统工程.md)
+    - [附录 K · 一线最小实践包](/manuscript/42-附录K-一线最小实践包.md)
+
+- **编辑部元数据**
+  - [写作宪法](/BOOK_SPEC.md)
+  - [术语表](/GLOSSARY.md)
+  - [风格指南](/STYLE_GUIDE.md)
+  - [全书诊断](/DIAGNOSIS.md)
+  - [配图清单](/FIGURE_LIST.md)
+  - [公开证据档案](/public-evidence.md)
+  - [延伸阅读](/references.md)
+  - [素材采集清单](/materials.md)

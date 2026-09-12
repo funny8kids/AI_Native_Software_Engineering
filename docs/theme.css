@@ -830,3 +830,418 @@ section.cover hr {
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ============================== Mermaid diagrams ============================== */
+.mermaid-block {
+  margin: 28px 0 32px;
+  padding: 20px 16px 12px;
+  background: var(--c-bg-soft);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+}
+
+.mermaid-block .mermaid {
+  display: flex;
+  justify-content: center;
+  min-height: 80px;
+}
+
+.mermaid-block .mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-block pre.mermaid,
+.markdown-section pre[data-lang="mermaid"],
+.markdown-section code.lang-mermaid {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* ============================== Cover page ============================== */
+section.cover {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.72) 0%, rgba(255,255,255,.92) 55%, #fff 100%),
+    radial-gradient(ellipse 80% 60% at 70% 20%, rgba(79,70,229,.10), transparent 60%),
+    #fff !important;
+}
+
+section.cover.show {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.72) 0%, rgba(255,255,255,.92) 55%, #fff 100%),
+    radial-gradient(ellipse 80% 60% at 70% 20%, rgba(79,70,229,.10), transparent 60%),
+    #fff !important;
+}
+
+section.cover .cover-main {
+  text-align: center;
+}
+
+section.cover .cover-main > p:first-of-type {
+  /* hide unused paragraphs gracefully */
+}
+
+section.cover img {
+  max-width: min(520px, 86%);
+  width: min(520px, 86%);
+  height: auto;
+  margin: 0 auto 8px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--c-border);
+}
+
+section.cover h1 {
+  font-size: clamp(32px, 5vw, 48px) !important;
+  font-weight: 800;
+  letter-spacing: -.03em;
+  color: var(--c-text) !important;
+  background: none !important;
+  -webkit-background-clip: initial !important;
+  background-clip: initial !important;
+  margin-top: 12px !important;
+}
+
+section.cover blockquote {
+  color: var(--c-text-2) !important;
+  font-size: 18px !important;
+  border-left: 3px solid var(--c-accent) !important;
+  margin: 16px auto 20px !important;
+  max-width: 520px;
+}
+
+section.cover .cover-main > p {
+  color: var(--c-text-3) !important;
+  font-size: 15px !important;
+}
+
+section.cover a:last-of-type {
+  /* keep ghost button */
+}
+
+/* Cover CTA buttons */
+section.cover .cover-main a[href*="manuscript"],
+section.cover .cover-main a[href*="guide"] {
+  display: inline-block;
+  margin: 0 8px 10px;
+  padding: 10px 22px;
+  border-radius: 999px !important;
+  font-weight: 600;
+  font-size: 14px !important;
+  border: 1px solid var(--c-border-strong) !important;
+  background: #fff !important;
+  color: var(--c-accent) !important;
+  transition: all .2s;
+  box-shadow: var(--shadow-sm);
+}
+
+section.cover .cover-main a[href*="manuscript"]:hover,
+section.cover .cover-main a[href*="guide"]:hover {
+  border-color: var(--c-accent) !important;
+  background: var(--c-accent) !important;
+  color: #fff !important;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+section.cover .cover-main > hr {
+  border: none;
+  border-top: 1px solid var(--c-border);
+  margin: 18px auto 12px;
+  max-width: 320px;
+  opacity: .8;
+}
+
+/* Cover bottom slogan lines (markdown p after hr) */
+section.cover .cover-main > p:last-child {
+  color: var(--c-text-2) !important;
+  font-size: 14px !important;
+  font-weight: 500;
+}
+
+/* ============================== Home page polish ============================== */
+.home-hero {
+  margin: 8px 0 20px;
+}
+
+.home-tagline {
+  font-size: 18px;
+  color: var(--c-text-2) !important;
+  border-left: 3px solid var(--c-accent);
+  padding-left: 16px;
+  margin: 0 0 8px !important;
+}
+
+.markdown-section .home-case-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin: 24px 0;
+}
+
+@media (max-width: 640px) {
+  .markdown-section .home-case-grid { grid-template-columns: 1fr; }
+}
+
+/* Chapter hero image (case studies) */
+.markdown-section > p > img,
+.markdown-section img[src*="/assets/"] {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--c-border);
+  box-shadow: var(--shadow-md);
+  margin: 8px 0 4px;
+  display: block;
+}
+
+/* Callout-ish blockquotes already styled; reinforce caption italics */
+.markdown-section p > em:only-child {
+  color: var(--c-text-dim);
+  font-size: 13px;
+  display: block;
+  margin-top: -12px;
+  margin-bottom: 28px;
+}
+
+/* ============================== Home components ============================== */
+.home-kicker {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--c-accent) !important;
+  margin: 0 0 6px !important;
+}
+
+.home-sub {
+  color: var(--c-text-3) !important;
+  font-size: 15px !important;
+  margin: 4px 0 8px !important;
+}
+
+.principle-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin: 22px 0 8px;
+}
+
+.principle-card {
+  background: var(--c-bg-soft);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  padding: 16px 16px 14px;
+  box-shadow: var(--shadow-xs);
+}
+
+.principle-card .principle-num {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--c-accent);
+  letter-spacing: .08em;
+  margin-bottom: 6px;
+}
+
+.principle-card strong {
+  display: block;
+  font-size: 15px;
+  color: var(--c-text);
+  margin-bottom: 6px;
+}
+
+.principle-card p {
+  margin: 0 !important;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+  color: var(--c-text-3) !important;
+}
+
+.path-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 18px 0 8px;
+}
+
+.path-card {
+  display: flex !important;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 14px 12px !important;
+  border: 1px solid var(--c-border) !important;
+  border-radius: var(--radius) !important;
+  background: #fff !important;
+  color: var(--c-text) !important;
+  border-bottom: 1px solid var(--c-border) !important;
+  transition: all .2s;
+  box-shadow: var(--shadow-xs);
+}
+
+.path-card strong { color: var(--c-accent) !important; font-size: 14px !important; }
+.path-card span { color: var(--c-text-3) !important; font-size: 12px !important; }
+
+.path-card:hover {
+  border-color: var(--c-accent) !important;
+  background: var(--c-accent-soft) !important;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md) !important;
+}
+
+/* Case cards — override image-in-p rules */
+.home-case-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 16px !important;
+  margin: 24px 0 !important;
+}
+
+.case-card {
+  display: flex !important;
+  flex-direction: column !important;
+  border: 1px solid var(--c-border) !important;
+  border-radius: var(--radius-lg) !important;
+  overflow: hidden;
+  background: #fff !important;
+  color: inherit !important;
+  border-bottom: 1px solid var(--c-border) !important;
+  transition: all .22s ease;
+  box-shadow: var(--shadow-sm) !important;
+  text-decoration: none !important;
+}
+
+.case-card img,
+.case-card > img {
+  width: 100% !important;
+  height: 140px !important;
+  object-fit: cover !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  display: block !important;
+}
+
+.case-card-body {
+  padding: 14px 16px 16px;
+  background: #fff;
+}
+
+.case-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--c-accent);
+  background: var(--c-accent-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+
+.case-card h3 {
+  margin: 0 0 6px !important;
+  font-size: 17px !important;
+  color: var(--c-text) !important;
+  border: none !important;
+  padding: 0 !important;
+  line-height: 1.3 !important;
+}
+
+.case-card p {
+  margin: 0 0 10px !important;
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+  color: var(--c-text-3) !important;
+}
+
+.case-cta {
+  font-size: 12px !important;
+  font-weight: 600;
+  color: var(--c-accent) !important;
+}
+
+.case-card:hover {
+  border-color: var(--c-accent) !important;
+  box-shadow: var(--shadow-lg) !important;
+  transform: translateY(-3px);
+}
+
+@media (max-width: 768px) {
+  .principle-row { grid-template-columns: 1fr; }
+  .path-row { grid-template-columns: repeat(2, 1fr); }
+  .home-case-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ============================== Chapter meta & tables ============================== */
+.markdown-section > blockquote:first-of-type {
+  background: linear-gradient(180deg, #f8f9ff 0%, #f3f4f8 100%);
+  border: 1px solid #dfe3f5 !important;
+  border-left: 3px solid var(--c-accent) !important;
+  border-radius: var(--radius) !important;
+  padding: 14px 18px !important;
+  margin: 18px 0 28px !important;
+  box-shadow: var(--shadow-xs);
+}
+
+.markdown-section > blockquote:first-of-type p {
+  margin: 6px 0 !important;
+  font-size: 14px !important;
+  color: var(--c-text-2) !important;
+}
+
+.markdown-section > blockquote:first-of-type strong {
+  color: var(--c-accent) !important;
+}
+
+.markdown-section blockquote {
+  border-left: 3px solid var(--c-border-strong) !important;
+  background: var(--c-bg-soft);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 12px 16px !important;
+}
+
+.markdown-section table {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+  border: 1px solid var(--c-border) !important;
+}
+
+.markdown-section thead th {
+  background: var(--c-bg-elevated) !important;
+  color: var(--c-text) !important;
+  font-weight: 700 !important;
+}
+
+.markdown-section tbody tr:nth-child(2n) {
+  background: #fafbfc;
+}
+
+.markdown-section input[type="checkbox"] {
+  accent-color: var(--c-accent);
+  margin-right: 6px;
+}
+
+.markdown-section pre {
+  border: 1px solid var(--c-border) !important;
+  border-radius: var(--radius) !important;
+}
+
+.content::before {
+  content: '';
+  position: sticky;
+  top: 0;
+  display: block;
+  height: 12px;
+  background: linear-gradient(180deg, rgba(0,0,0,.03), transparent);
+  pointer-events: none;
+  z-index: 1;
+  margin-bottom: -12px;
+}
+
+::selection { background: #c7d2fe; color: #1e1b4b; }
