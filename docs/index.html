@@ -73,7 +73,10 @@
       var probe = sec.querySelector('p, li, h2, td');
       var w = (probe && probe.offsetWidth) || sec.clientWidth || 0;
       if (!w) return 720; // 只在量不到时兜底（零尺寸布局：后台标签页 / 打印）
-      return Math.min(Math.max(w, 300), 1200);
+      // 窄屏不把月份轴硬塞进 300px（实测刻度文字互相压字）：按 600 定宽，
+      // 多出来的宽度交给 .mermaid-block 的横向滚动——与同页宽流程图同一策略。
+      var narrow = window.matchMedia('(max-width: 768px)').matches;
+      return Math.min(Math.max(w, narrow ? 600 : 300), 1200);
     }
 
     function ainseInitMermaid(dark) {
@@ -89,21 +92,66 @@
       });
     }
 
+    // mermaid.run() 返回 Promise，try/catch 拦不住它的拒绝——会以
+    // "Uncaught (in promise)" 落进控制台。且首绘 / 封面收起补渲染 / 主题切换重绘
+    // 三条路径都会把手上的节点重置 textContent，并行渲染会互相踩。
+    // 全局只留一条串行队列：一次一份图在飞；出队时页面已切走就整批作废。
+    // 失败仍用 console.error 点名「哪条路径、哪一页、哪张图」——
+    // 静默或降级成 warn 等于给交互守卫拆闸（守卫按 0 控制台错误判绿）。
+    var ainseMermaidChain = Promise.resolve();
+    // 窄屏不许把图等比缩到不可读：mermaid 给 svg 写的是内联 max-width = 自己的 viewBox 宽，
+    // 于是 viewBox 1045 的横向流程图在 390 视口里被压成 340px（缩放 0.33，节点文字 4～5px）。
+    // 这里按「每张图自己的 viewBox 宽」补一条 min-width，多出来的宽度交给
+    // .mermaid-block 已有的 overflow-x:auto 横向滚动。宽屏不介入——桌面保持整图可见、不溢出。
+    function ainseGuardDiagramWidth(host) {
+      if (!window.matchMedia('(max-width: 768px)').matches) return;
+      var svg = host.querySelector('svg');
+      if (!svg || !svg.viewBox || !svg.viewBox.baseVal.width) return;
+      svg.style.minWidth = Math.round(svg.viewBox.baseVal.width) + 'px';
+    }
+    // opts.reset：出队时才把节点还原成源码（先还原＝会在上一批还在画时踩到同一节点）
+    function ainseRunMermaid(nodes, why, opts) {
+      if (typeof mermaid === 'undefined') return;
+      opts = opts || {};
+      var route = location.hash;
+      var live = nodes.filter(function (el) { return document.contains(el); });
+      nodes.length = 0;
+      if (!live.length) return;
+      ainseMermaidChain = ainseMermaidChain
+        .then(function () {
+          if (location.hash !== route) return null;
+          var fresh = live.filter(function (el) { return document.contains(el); });
+          if (!fresh.length) return null;
+          if (opts.reset) {
+            fresh.forEach(function (el) {
+              el.removeAttribute('data-processed');
+              el.textContent = el.getAttribute('data-source');
+            });
+          }
+          if (opts.init) opts.init();
+          return mermaid.run({ nodes: fresh }).then(function () {
+            fresh.forEach(ainseGuardDiagramWidth);
+          });
+        })
+        .catch(function (e) {
+          var head = (live[0].getAttribute('data-source') || '').trim().split('\n')[0].slice(0, 40);
+          console.error('mermaid 渲染失败（' + why + ' @ ' + route + ' · ' + head + '）：'
+            + ((e && (e.message || e.str)) || Object.prototype.toString.call(e)));
+        });
+    }
+
     // 主题切换后按新配色重绘当前页全部 Mermaid 图
     function ainseRerenderMermaid(dark) {
       if (typeof mermaid === 'undefined') return;
-      ainseInitMermaid(dark);
       var nodes = [];
       document.querySelectorAll('.markdown-section .mermaid').forEach(function (el) {
-        var src = el.getAttribute('data-source');
-        if (!src) return;
-        el.removeAttribute('data-processed');
-        el.textContent = src;
-        nodes.push(el);
+        if (el.getAttribute('data-source')) nodes.push(el);
       });
       if (!nodes.length) return;
-      try { mermaid.run({ nodes: nodes }); }
-      catch (e) { console.warn('mermaid re-render failed', e); }
+      ainseRunMermaid(nodes, '主题重绘', {
+        reset: true,
+        init: function () { ainseInitMermaid(dark); },
+      });
     }
 
     var AINSE_ICONS = {
@@ -157,6 +205,28 @@
             return html + footer;
           });
         },
+        // 图注挂号：全书 104 条图注在稿子里是 `**图 4-1｜四支柱** — 说明…`，
+        // 渲染后与正文里的强调句完全同形，读者分不清哪句是图的话、哪句是作者的话。
+        // 这里只挂一个类名，版式全部交给 theme.css；不改稿、不引入任何 CDN。
+        function figureCaption(hook) {
+          hook.afterEach(function (html) {
+            return html.replace(
+              /<p><strong>(图\s*[0-9A-Za-z]+-[0-9.]+[^<]*)<\/strong>/g,
+              '<p class="figure-caption"><strong>$1</strong>'
+            );
+          });
+        },
+        // 表格滚动包裹层：窄屏要让宽表横向滚动，此前用 `table{display:block}` 实现，
+        // 视觉上是通的，但 display:block 会把 <table> 的表格语义从可访问性树里抹掉
+        // （读屏软件不再报出行列）。改成给表格套一层滚动容器，表格自己保持 table。
+        function tableScroll(hook) {
+          hook.afterEach(function (html) {
+            return html.replace(
+              /<table>[\s\S]*?<\/table>/g,
+              function (t) { return '<div class="table-scroll">' + t + '</div>'; }
+            );
+          });
+        },
         // Self-hosted Mermaid: convert ```mermaid fences after Docsify render
         function mermaidPlugin(hook, vm) {
           var mermaidNodes = [];
@@ -177,14 +247,13 @@
               if (!src) return;
               var svg = el.querySelector('svg');
               if (svg && svg.getBoundingClientRect().width > 60) return;
-              el.removeAttribute('data-processed');
-              el.textContent = src;
               nodes.push(el);
             });
             if (!nodes.length) return;
-            ainseInitMermaid(ainseGetTheme() === 'dark');
-            try { mermaid.run({ nodes: nodes }); }
-            catch (e) { console.warn('mermaid re-layout failed', e); }
+            ainseRunMermaid(nodes, '封面收起补渲染', {
+              reset: true,
+              init: function () { ainseInitMermaid(ainseGetTheme() === 'dark'); },
+            });
           }
 
           function watchCover() {
@@ -264,16 +333,12 @@
             if (mermaidNodes.length) {
               // 封面页（或封面尚未收起时）不做首绘：零尺寸布局会产出 NaN transform 的塌陷图；
               // 封面收起由 watchCover / hashchange 的 rerenderHidden 统一补渲染
-              if (isCoverRoute() || document.querySelector('.cover.show')) {
-                mermaidNodes = [];
-              } else {
-                try {
-                  mermaid.run({ nodes: mermaidNodes });
-                } catch (e) {
-                  console.warn('mermaid render failed', e);
-                }
-                mermaidNodes = [];
+              if (!isCoverRoute() && !document.querySelector('.cover.show')) {
+                ainseRunMermaid(mermaidNodes, '首绘', {
+                  init: function () { ainseInitMermaid(ainseGetTheme() === 'dark'); },
+                });
               }
+              mermaidNodes = [];
             }
 
             watchCover();
@@ -388,9 +453,15 @@
             bar.id = 'reading-progress';
             document.body.appendChild(bar);
 
-            var toc = document.createElement('nav');
+            // Docsify 用 document.querySelector('nav') 认领站点顶栏（源码：b("nav")||w("nav")），
+            // 这里若用 <nav> 就会被它抢走：顶栏内容灌进 TOC、.app-nav 的 fixed 全宽定位
+            // 再叠加 .page-toc 的 z-index:90，结果顶栏与 TOC 双双压在侧边栏底下点不动。
+            // TOC 因此用 div + role=navigation，把唯一的 <nav> 让给 Docsify 的顶栏。
+            var toc = document.createElement('div');
             toc.className = 'page-toc';
             toc.id = 'page-toc';
+            toc.setAttribute('role', 'navigation');
+            toc.setAttribute('aria-label', '本页目录');
             document.body.appendChild(toc);
 
             applyTheme(ainseGetTheme(), false);

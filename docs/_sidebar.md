@@ -9,47 +9,47 @@
     - [四案例时间线](/manuscript/ch03-案例时间线.md)
     - [四案例角色设定卡](/manuscript/ch04-角色设定卡.md)
     - [四案例数字清单](/manuscript/ch05-数字清单.md)
-  - [卷首](</manuscript/part-1-认知.md>) · 第一部分 · 认知
+  - [卷首 · 第一部分 · 认知](</manuscript/part-1-认知.md>)
     - [第 1 章 · AI 原生不是让 AI 写代码](/manuscript/ch06-第1章-AI原生不是让AI写代码.md)
     - [第 2 章 · 人在回路](/manuscript/ch07-第2章-人在回路.md)
     - [第 3 章 · 人机分工](/manuscript/ch08-第3章-人机分工.md)
     - [第 4 章 · AI 原生工程栈](/manuscript/ch09-第4章-AI原生工程栈.md)
-  - [卷首](</manuscript/part-2-考古.md>) · 第二部分 · 考古
+  - [卷首 · 第二部分 · 考古](</manuscript/part-2-考古.md>)
     - [第 5 章 · 大规模考古画图](/manuscript/ch10-第5章-大规模考古画图.md)
     - [第 6 章 · 跨团队依赖分析](/manuscript/ch11-第6章-跨团队依赖分析.md)
     - [第 7 章 · AI 读懂祖传代码](/manuscript/ch12-第7章-AI读懂祖传代码.md)
-  - [卷首](</manuscript/part-3-立界.md>) · 第三部分 · 立界
+  - [卷首 · 第三部分 · 立界](</manuscript/part-3-立界.md>)
     - [第 8 章 · 目标架构](/manuscript/ch13-第8章-目标架构.md)
     - [第 9 章 · 契约先行](/manuscript/ch14-第9章-契约先行.md)
     - [第 10 章 · 边界变测试](/manuscript/ch15-第10章-边界变测试.md)
     - [第 11 章 · 留缝](/manuscript/ch16-第11章-留缝.md)
-  - [卷首](</manuscript/part-4-重构.md>) · 第四部分 · 重构
+  - [卷首 · 第四部分 · 重构](</manuscript/part-4-重构.md>)
     - [第 12 章 · 数据与日志分家](/manuscript/ch17-第12章-数据与日志分家.md)
     - [第 13 章 · 单文件 API 到 router+nginx](/manuscript/ch18-第13章-单文件API到router+nginx.md)
     - [第 14 章 · Python 立包与迁移](/manuscript/ch19-第14章-Python立包与迁移.md)
     - [第 15 章 · 前端解耦多端设计系统](/manuscript/ch20-第15章-前端解耦多端设计系统.md)
-  - [卷首](</manuscript/part-5-新功能.md>) · 第五部分 · 新功能
+  - [卷首 · 第五部分 · 新功能](</manuscript/part-5-新功能.md>)
     - [第 16 章 · 聊天功能](/manuscript/ch21-第16章-聊天功能.md)
     - [第 17 章 · 多端 BFF](/manuscript/ch22-第17章-多端BFF.md)
     - [第 18 章 · 亿级流量](/manuscript/ch23-第18章-亿级流量.md)
-  - [卷首](</manuscript/part-6-上线.md>) · 第六部分 · 上线
+  - [卷首 · 第六部分 · 上线](</manuscript/part-6-上线.md>)
     - [第 19 章 · 五层门禁](/manuscript/ch24-第19章-五层门禁.md)
     - [第 20 章 · 风控不可绕过](/manuscript/ch25-第20章-风控不可绕过.md)
     - [第 21 章 · 对账灰度回滚监控](/manuscript/ch26-第21章-对账灰度回滚监控.md)
     - [第 22 章 · 安全合规公开仓库](/manuscript/ch27-第22章-安全合规公开仓库.md)
-  - [卷首](</manuscript/part-7-治理.md>) · 第七部分 · 治理
+  - [卷首 · 第七部分 · 治理](</manuscript/part-7-治理.md>)
     - [第 23 章 · 提示词工程与归档](/manuscript/ch28-第23章-提示词工程与归档.md)
     - [第 24 章 · AI 评审与幻觉处理](/manuscript/ch29-第24章-AI评审与幻觉处理.md)
     - [第 25 章 · 文档 ADR/RFC/设计令牌治理](/manuscript/ch30-第25章-文档ADR-RFC-设计令牌治理.md)
     - [第 26 章 · 组织治理](/manuscript/ch31-第26章-组织治理.md)
     - [第 27 章 · 契约治理](/manuscript/ch32-第27章-契约治理.md)
-  - [卷首](</manuscript/part-8-四案例.md>) · 第八部分 · 四案例
+  - [卷首 · 第八部分 · 四案例](</manuscript/part-8-四案例.md>)
     - [第 28 章 · 灰度发布](/manuscript/ch33-第28章-灰度发布.md)
     - [案例一 · 300 人电商平台](/manuscript/ch34-案例一-300人电商平台.md)
     - [案例二 · 海星交易所](/manuscript/ch35-案例二-海星交易所.md)
     - [案例三 · 暗流资本](/manuscript/ch36-案例三-暗流资本.md)
     - [案例四 · 守夜人科技](/manuscript/ch37-案例四-守夜人科技.md)
-  - [卷首](</manuscript/part-9-交叉收束.md>) · 第九部分 · 交叉收束
+  - [卷首 · 第九部分 · 交叉收束](</manuscript/part-9-交叉收束.md>)
     - [第 33 章 · 四案例交叉启示](/manuscript/ch38-第33章-四案例交叉启示.md)
   - 配套附录
     - [附录 A · 提示词库骨架](/manuscript/ch39-附录A-提示词库骨架.md)

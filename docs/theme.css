@@ -169,9 +169,9 @@ a:hover { color: var(--c-accent-hover); }
 
 .sidebar ul li {
   margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* 目录标题是这本书的导航本体，宁可折行也不能截断——
+     nowrap + overflow:hidden 会把「路径 A：决策者 / CTO / 技术负责人」切成半句。 */
+  white-space: normal;
 }
 
 .sidebar ul li a {
@@ -199,16 +199,23 @@ a:hover { color: var(--c-accent-hover); }
 }
 
 /* Top-level section labels */
-.sidebar-nav > ul > li > p,
-.sidebar-nav > ul > li > strong {
+/* 分组说明（「《AI 原生软件工程》书稿」「地基（四案例并列）」「配套附录」）：
+   Docsify 把裸文本渲染成 li > p / li > strong，任何层级都要读作小标题，
+   而不是"一条点不动、又和链接长得一样的正文"。 */
+.sidebar-nav li > p,
+.sidebar-nav li > strong {
   display: block;
   color: var(--c-text-dim);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .08em;
+  letter-spacing: .05em;
   padding: 16px 14px 6px;
   margin: 0;
+}
+.sidebar ul ul > li > p,
+.sidebar ul ul > li > strong {
+  padding: 12px 14px 5px 26px;
+  font-size: 11px;
 }
 
 /* Nested sidebar items */
@@ -449,6 +456,15 @@ article.markdown-section,
 .token.namespace { opacity: .7; }
 
 /* ============================== Tables ============================== */
+/* 滚动包裹层由 index.html 的 tableScroll 插件在渲染层挂号。
+   窄屏过去写成 `table{display:block; overflow-x:auto}`：视觉上能滚，但 display:block
+   会把 <table> 的表格语义从可访问性树里抹掉（读屏不再报行/列）。现在滚动交给这层 div，
+   表格自己保持 display:table。 */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .markdown-section table {
   width: 100%;
   border-collapse: separate;
@@ -548,6 +564,24 @@ article.markdown-section,
   box-shadow: var(--shadow-sm);
 }
 
+/* 图注：由 index.html 的 figureCaption 插件挂类（稿件写法 **图 4-1｜…**）。
+   未挂类前它和正文里的强调句同形，读者分不清哪句是图的话、哪句是作者的话；
+   出版物的做法是三段拉开：字号降一档、颜色退一层、与配图收紧成一整块。 */
+.markdown-section p.figure-caption {
+  margin: -8px 0 30px;
+  padding-left: 12px;
+  border-left: 2px solid var(--c-border-strong);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--c-text-3);
+}
+.markdown-section p.figure-caption strong {
+  color: var(--c-accent);
+  font-weight: 700;
+  letter-spacing: .01em;
+}
+
 /* ============================== Keyboard ============================== */
 kbd {
   display: inline-block;
@@ -636,6 +670,13 @@ section.cover {
   overflow: hidden;
 }
 
+/* Docsify 收起封面时只把 show 类摘掉，节点仍留在 DOM 里。封面是
+   position:fixed + 100vh + z-index:999，若不彻底退出布局就会盖住整页：
+   正文看得见，但每一次点击都落在它身上（实测命中测试 5/5 命中 .cover）。 */
+section.cover:not(.show) {
+  display: none !important;
+}
+
 /* Cover subtle decorative gradient */
 section.cover::before {
   content: '';
@@ -651,7 +692,9 @@ section.cover.show ~ main,
 body:has(section.cover.show) .sidebar,
 body:has(section.cover.show) .app-nav,
 body:has(section.cover.show) .content {
-  display: none;
+  /* .app-nav 自己写了 display:flex !important，这里不加 !important 就退不出布局：
+     顶栏会留在封面底下（z-index 200 < 999）——眼睛看不见、鼠标点得到。 */
+  display: none !important;
 }
 
 section.cover .cover-main {
@@ -666,21 +709,8 @@ section.cover .cover-main > p:first-child a img {
   margin-bottom: 32px;
 }
 
-/* Cover title */
-section.cover h1 {
-  font-size: 56px;
-  font-weight: 900;
-  letter-spacing: -.04em;
-  margin: 0 0 12px;
-  padding: 0;
-  border: none;
-  line-height: 1.1;
-  color: var(--c-text);
-  background: linear-gradient(135deg, var(--c-text) 0%, var(--c-accent) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
+/* 封面标题的外观统一由下方 "Cover page（视觉段）" 给出。这里只留一条：
+   Docsify 会给标题补一个 ¶ 角标，封面上不需要。 */
 section.cover h1::after { display: none; }
 
 /* Cover subtitle */
@@ -694,26 +724,50 @@ section.cover .cover-main > p:nth-of-type(2) {
   border: none;
 }
 
-/* Cover CTA buttons */
-section.cover .cover-main > p:last-of-type a,
-section.cover .cover-main a[href] {
+/* Cover CTA —— 封面按钮的唯一一处定义（限定「段落里的链接」，
+   写成 .cover-main a[href] 会连带吃掉 autoHeader 塞进 h1 的 <a class="anchor">）。
+   本块有一条硬规矩：background 与 color 必须成对写在同一条规则里。
+   这里出过一次白底白字：文件内两条规则各带一半 !important，高优先级那条只锁
+   color:#fff、低优先级那条只锁 background:#fff，两个 !important 在不同属性上
+   各自获胜，合成出 cr=1.0 的两枚隐形按钮（实测 1280/1440/390 三档一致）。
+   配对：主按钮＝强调色底＋纸色字，次按钮＝纸色底＋强调色字。--c-accent 在浅色主题
+   是深靛 #4f46e5、深色主题换浅靛 #818cf8，--c-bg 反向，两组配对两主题都 ≥6:1。 */
+section.cover .cover-main p a[href]:not(.anchor) {
   display: inline-block;
-  padding: 14px 40px;
-  margin: 0 8px;
-  background: var(--c-accent);
-  color: #fff !important;
+  margin: 0 7px 10px;
+  padding: 12px 26px;
+  font-size: 15px;
   font-weight: 600;
-  font-size: 16px;
-  border-radius: var(--radius);
-  border: none !important;
-  box-shadow: 0 4px 14px rgba(79,70,229,.25);
-  transition: all .25s;
+  line-height: 1.4;
+  letter-spacing: .02em;
+  border-radius: 999px;
+  border: 1px solid var(--c-border-strong);
+  background: var(--c-bg);
+  color: var(--c-accent);
+  box-shadow: var(--shadow-xs);
+  transition: background-color .2s, color .2s, border-color .2s, transform .2s, box-shadow .2s;
 }
 
-section.cover .cover-main a:hover {
+section.cover .cover-main p a[href]:not(.anchor):hover {
+  background: var(--c-accent);
+  color: var(--c-bg);
+  border-color: var(--c-accent);
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(79,70,229,.35);
+  box-shadow: var(--shadow-md);
+}
+
+/* 封面上只有一个主行动：开始阅读 */
+section.cover .cover-main p a[href*="manuscript"]:not(.anchor) {
+  background: var(--c-accent);
+  color: var(--c-bg);
+  border-color: var(--c-accent);
+  box-shadow: var(--shadow-md);
+}
+
+section.cover .cover-main p a[href*="manuscript"]:not(.anchor):hover {
   background: var(--c-accent-hover);
+  color: var(--c-bg);
+  border-color: var(--c-accent-hover);
 }
 
 /* Cover blockquote / tagline */
@@ -756,22 +810,33 @@ section.cover hr {
   scroll-margin-top: calc(var(--navbar-h) + 24px);
 }
 
-/* Anchor hover effect */
-.markdown-section h1:hover .anchor,
-.markdown-section h2:hover .anchor,
-.markdown-section h3:hover .anchor {
-  opacity: 1;
-}
-.anchor {
-  float: left;
-  margin-left: -24px;
-  padding-right: 6px;
-  opacity: 0;
-  transition: opacity .2s;
-  color: var(--c-text-dim);
+/* Docsify 的 autoHeader 会把整行标题文字包进 a.anchor，而不是只加一个尾部 ¶
+   标记——所以 opacity:0、float:left、负 margin 任何一条都会让标题直接消失。
+   这里让链接完整继承标题样式，把"可锚点"的暗示交给左侧的 # 提示符。 */
+.markdown-section .anchor {
+  color: inherit;
+  text-decoration: none;
   border-bottom: none !important;
+  position: relative;
 }
-.anchor:hover { color: var(--c-accent); }
+
+.markdown-section .anchor::before {
+  content: '#';
+  position: absolute;
+  right: 100%;
+  margin-right: 10px;
+  color: var(--c-accent);
+  font-weight: 400;
+  opacity: 0;
+  transition: opacity .15s;
+}
+
+.markdown-section h1:hover .anchor::before,
+.markdown-section h2:hover .anchor::before,
+.markdown-section h3:hover .anchor::before,
+.markdown-section h4:hover .anchor::before {
+  opacity: .5;
+}
 
 /* ============================== Docsify misc ============================== */
 #app > .spinner { color: var(--c-accent); }
@@ -798,7 +863,30 @@ section.cover hr {
 
   .sidebar-toggle { display: flex; }
 
-  .app-nav { padding: 0 16px; }
+  /* 顶栏：窄屏必须横向滚动，不能换行。
+     父容器是 position:fixed + height:var(--navbar-h) 的硬高度，li 默认 flex-shrink:1，
+     五个中文项被压扁后在 60px 条内折成 2–3 行并溢出裁切。
+     justify-content 从 flex-end 改成 flex-start：否则内容超宽时右侧（最后一个链接）
+     滚不进来。 */
+  .app-nav {
+    padding: 0 12px;
+    justify-content: flex-start;
+  }
+
+  .app-nav ul {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app-nav li { flex: 0 0 auto; }
+
+  .app-nav a {
+    white-space: nowrap;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
 
   .markdown-section, article.markdown-section {
     padding: 32px 24px 80px;
@@ -809,15 +897,15 @@ section.cover hr {
   .markdown-section h3 { font-size: 18px; }
   .markdown-section pre code { font-size: 13px; }
 
+  /* 表格：滚动由 .table-scroll 包裹层承担，表格保持 display:table（语义）；
+     这里只放开宽度让它按内容撑开，窄于容器时仍占满一栏。 */
   .markdown-section table {
-    display: block;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
     font-size: 13px;
+    width: auto;
+    min-width: 100%;
   }
 
-  section.cover h1 { font-size: 36px; }
-  section.cover .cover-main > p { font-size: 16px; }
+  /* 封面书名用 clamp() 自适应，这里不再补一条会被 !important 压掉的字号规则 */
 }
 
 /* ============================== Print ============================== */
@@ -850,6 +938,17 @@ section.cover hr {
 .mermaid-block .mermaid svg {
   max-width: 100%;
   height: auto;
+}
+
+/* 窄屏：图被撑宽后必须左对齐，不能居中。
+   .mermaid 是 justify-content:center 的 flex，子元素比滚动容器宽时，居中会把左半张图
+   推到滚动容器左侧之外，而左溢出滚不回来（scrollLeft 不能为负）——实测图左缘 x=-105。
+   撑宽本身由 index.html 的 ainseGuardDiagramWidth() 按每张图的 viewBox 宽逐图施加，
+   不用 CSS 定值：定值会把 302px 的甘特也拉到 600px（缩放 2.0，字号失控）。 */
+@media (max-width: 768px) {
+  .mermaid-block .mermaid {
+    justify-content: flex-start;
+  }
 }
 
 .mermaid-block pre.mermaid,
@@ -895,15 +994,36 @@ section.cover img {
   border: 1px solid var(--c-border);
 }
 
+/* 封面书名：全书唯一一处定义。
+   不要用 background-clip:text + -webkit-text-fill-color:transparent 做渐变字——
+   一旦别处用 `background:none !important` 撤掉渐变而撤不掉透明填充，标题就整块隐形
+   （本轮实测：浅色主题下封面书名 rect 正常、textContent 正常、肉眼全空）。
+   衬线实色 + 收紧字距才是这本书该有的样子。 */
 section.cover h1 {
-  font-size: clamp(32px, 5vw, 48px) !important;
+  font-size: clamp(34px, 4.7vw, 56px) !important;
   font-weight: 800;
-  letter-spacing: -.03em;
+  letter-spacing: -.02em;
+  line-height: 1.18;
   color: var(--c-text) !important;
-  background: none !important;
-  -webkit-background-clip: initial !important;
-  background-clip: initial !important;
-  margin-top: 12px !important;
+  -webkit-text-fill-color: currentColor;
+  margin: 0 0 12px;
+  padding: 0;
+  border: none;
+}
+
+/* autoHeader 会把整行标题文字包进 <a class="anchor">，链接默认色必须被压回去 */
+section.cover h1 a.anchor,
+section.cover h1 a.anchor:hover {
+  color: inherit;
+  -webkit-text-fill-color: currentColor;
+  background: none;
+  border: none;
+  box-shadow: none;
+  text-decoration: none;
+  padding: 0;
+  margin: 0;
+  display: inline;
+  transform: none;
 }
 
 section.cover blockquote {
@@ -917,35 +1037,6 @@ section.cover blockquote {
 section.cover .cover-main > p {
   color: var(--c-text-3) !important;
   font-size: 15px !important;
-}
-
-section.cover a:last-of-type {
-  /* keep ghost button */
-}
-
-/* Cover CTA buttons */
-section.cover .cover-main a[href*="manuscript"],
-section.cover .cover-main a[href*="guide"] {
-  display: inline-block;
-  margin: 0 8px 10px;
-  padding: 10px 22px;
-  border-radius: 999px !important;
-  font-weight: 600;
-  font-size: 14px !important;
-  border: 1px solid var(--c-border-strong) !important;
-  background: #fff !important;
-  color: var(--c-accent) !important;
-  transition: all .2s;
-  box-shadow: var(--shadow-sm);
-}
-
-section.cover .cover-main a[href*="manuscript"]:hover,
-section.cover .cover-main a[href*="guide"]:hover {
-  border-color: var(--c-accent) !important;
-  background: var(--c-accent) !important;
-  color: #fff !important;
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
 }
 
 section.cover .cover-main > hr {
@@ -1076,7 +1167,9 @@ section.cover .cover-main > p:last-child {
   padding: 14px 14px 12px !important;
   border: 1px solid var(--c-border) !important;
   border-radius: var(--radius) !important;
-  background: #fff !important;
+  /* 卡片底色用纸色令牌，不写死 #fff：字色是主题变量，
+     写死白底在深色主题下就是浅字压白底（实测 cr≈1.1）。 */
+  background: var(--c-bg) !important;
   color: var(--c-text) !important;
   border-bottom: 1px solid var(--c-border) !important;
   transition: all .2s;
@@ -1107,7 +1200,7 @@ section.cover .cover-main > p:last-child {
   border: 1px solid var(--c-border) !important;
   border-radius: var(--radius-lg) !important;
   overflow: hidden;
-  background: #fff !important;
+  background: var(--c-bg) !important;
   color: inherit !important;
   border-bottom: 1px solid var(--c-border) !important;
   transition: all .22s ease;
@@ -1129,7 +1222,7 @@ section.cover .cover-main > p:last-child {
 
 .case-card-body {
   padding: 14px 16px 16px;
-  background: #fff;
+  background: var(--c-bg);
 }
 
 .case-badge {
@@ -1394,11 +1487,8 @@ html[data-theme='dark'] section.cover {
     #0f1117 !important;
 }
 
-html[data-theme='dark'] section.cover h1 {
-  background: linear-gradient(135deg, #f0f2fa 0%, #a5b4fc 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-}
+/* 深色主题下封面书名不另外做渐变：沿用同一条实色规则，只靠 --c-text 换色，
+   浅色/深色两套主题的书名渲染逻辑因此完全一致（避免"只在一种主题下隐形"）。 */
 
 html[data-theme='dark'] kbd { background: var(--c-bg-soft); }
 

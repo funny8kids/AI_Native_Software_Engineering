@@ -3,7 +3,7 @@
 > 规则：技术图 = Mermaid；封面/卷首/头图 = 抽象位图（无文字）。可读对象 ≤12（定义见 `BOOK_SPEC.md` §9）。术语见 `GLOSSARY.md`。
 > **本表的图数、图号、图型三列由 `python3 scripts/check_figures.py --print` 从手稿实测生成，不手写。**
 > 最近一次刷新：2026-09-24。实测结论：**107 张技术图**（手稿 43 个文件 104 张 + 站点页 3 张），**107/107 通过浏览器端 `mermaid.parse` 全量校验，0 语法错误**；守卫同时判定每章 2–5 张、图号按阅读顺序递增、图注与图一一对应、节点上限全部达标。
-> 配套：`python3 scripts/check_links.py`（需先在 `docs/` 起静态站）→ 去重后 **97 条本地引用 URL 全部 HTTP 200，死链 = 0**；已用两条假链做过变异自检，确认守卫会红。
+> 配套：`python3 scripts/check_links.py`（自带临时服务器，无需手工起站）→ 去重后 **97 条本地引用 URL 全部 HTTP 200，死链 = 0**；已用两条假链做过变异自检，确认守卫会红。图在窄屏是否被缩糊由第六条守卫 `check_mobile.py --report` 逐图给 `viewBox / 渲染宽 / 缩放`。
 
 ## 每文件图数（实测）
 
@@ -107,8 +107,12 @@ flowchart LR
 
 ```bash
 python3 scripts/check_figures.py                      # 图数 / 图号 / 图注 / 节点上限
-python3 -m http.server 8080 --directory docs &        # 起本地站
-python3 scripts/check_links.py                        # 全部本地引用逐条发 HTTP
+python3 scripts/check_links.py                        # 第二条：本地引用逐条发 HTTP（自带临时服务器）
+python3 scripts/check_markdown.py                     # 第三条：围栏 / 裸围栏 / HTML 块吞语法 / 双副本一致
+python3 scripts/check_overlays.py                     # 第四条：整屏遮罩的层叠语义闸（静态）
+python3 scripts/check_interactions.py                 # 第五条：命中测试 + 真实点击（62 路由 × 1280/390）
+python3 scripts/check_mobile.py                       # 第六条：390 窄屏几何闸（顶栏折行 / 图缩糊 / 居中溢出）
+python3 scripts/check_mobile.py --report              # 逐图输出 viewBox / 渲染宽 / 缩放（本表的图数不看缩放）
 # 浏览器端：对 107 个围栏逐个 mermaid.parse（本表刷新时 107/107 通过）
 ```
 
