@@ -8,6 +8,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
   <meta name="theme-color" content="#4f46e5">
 
+  <!-- 主题在首屏渲染前应用，避免深色闪烁。默认浅色；仅当用户明确选过深色才提前设置 -->
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem('ainse-theme') === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      } catch (e) { /* localStorage 不可用时保持浅色默认 */ }
+    })();
+  </script>
+
   <!-- All assets are self-hosted: zero external CDN dependency -->
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="theme.css">
@@ -24,6 +35,70 @@
   <noscript>请启用 JavaScript 以浏览本文档。</noscript>
 
   <script>
+    var AINSE_THEME_KEY = 'ainse-theme';
+
+    function ainseGetTheme() {
+      try { return localStorage.getItem(AINSE_THEME_KEY) === 'dark' ? 'dark' : 'light'; }
+      catch (e) { return 'light'; }
+    }
+
+    function ainseMermaidVars(dark) {
+      return dark
+        ? {
+            primaryColor: '#1e1b4b',
+            primaryTextColor: '#e8eaf0',
+            primaryBorderColor: '#818cf8',
+            lineColor: '#8b909c',
+            secondaryColor: '#1c1f27',
+            tertiaryColor: '#12141a',
+            fontSize: '14px',
+          }
+        : {
+            primaryColor: '#eef2ff',
+            primaryTextColor: '#1a1d23',
+            primaryBorderColor: '#4f46e5',
+            lineColor: '#6b7280',
+            secondaryColor: '#f7f8fa',
+            tertiaryColor: '#ffffff',
+            fontSize: '14px',
+          };
+    }
+
+    function ainseInitMermaid(dark) {
+      if (typeof mermaid === 'undefined') return;
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'loose',
+        theme: 'neutral',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+        flowchart: { curve: 'basis', htmlLabels: true },
+        themeVariables: ainseMermaidVars(dark),
+      });
+    }
+
+    // 主题切换后按新配色重绘当前页全部 Mermaid 图
+    function ainseRerenderMermaid(dark) {
+      if (typeof mermaid === 'undefined') return;
+      ainseInitMermaid(dark);
+      var nodes = [];
+      document.querySelectorAll('.markdown-section .mermaid').forEach(function (el) {
+        var src = el.getAttribute('data-source');
+        if (!src) return;
+        el.removeAttribute('data-processed');
+        el.textContent = src;
+        nodes.push(el);
+      });
+      if (!nodes.length) return;
+      try { mermaid.run({ nodes: nodes }); }
+      catch (e) { console.warn('mermaid re-render failed', e); }
+    }
+
+    var AINSE_ICONS = {
+      moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>',
+      sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>',
+      up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>',
+    };
+
     window.$docsify = {
       name: 'AI 原生软件工程',
       nameLink: '/',
@@ -73,29 +148,65 @@
         function mermaidPlugin(hook, vm) {
           var mermaidNodes = [];
 
-          function initMermaid() {
-            if (typeof mermaid === 'undefined') return;
-            mermaid.initialize({
-              startOnLoad: false,
-              securityLevel: 'loose',
-              theme: 'neutral',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
-              flowchart: { curve: 'basis', htmlLabels: true },
-              themeVariables: {
-                primaryColor: '#eef2ff',
-                primaryTextColor: '#1a1d23',
-                primaryBorderColor: '#4f46e5',
-                lineColor: '#6b7280',
-                secondaryColor: '#f7f8fa',
-                tertiaryColor: '#ffffff',
-                fontSize: '14px',
-              },
-            });
+          function isCoverRoute() {
+            var h = (location.hash || '#/').replace(/^#/, '').split('?')[0];
+            return h === '' || h === '/' || h === '/';
           }
+
+          // 封面显示期间渲染的图会因零尺寸布局塌陷（viewBox 退化），
+          // 封面收起后对塌陷/仍不可见的图重新排版；对已正常的图是空操作
+          function rerenderHidden() {
+            if (typeof mermaid === 'undefined') return;
+            if (document.querySelector('.cover.show')) return; // 封面仍在场，等收起再说
+            var nodes = [];
+            document.querySelectorAll('.markdown-section .mermaid').forEach(function (el) {
+              var src = el.getAttribute('data-source');
+              if (!src) return;
+              var svg = el.querySelector('svg');
+              if (svg && svg.getBoundingClientRect().width > 60) return;
+              el.removeAttribute('data-processed');
+              el.textContent = src;
+              nodes.push(el);
+            });
+            if (!nodes.length) return;
+            ainseInitMermaid(ainseGetTheme() === 'dark');
+            try { mermaid.run({ nodes: nodes }); }
+            catch (e) { console.warn('mermaid re-layout failed', e); }
+          }
+
+          function watchCover() {
+            var cover = document.querySelector('.cover');
+            if (!cover || cover.dataset.ainseWatched) return;
+            cover.dataset.ainseWatched = '1';
+            new MutationObserver(function () {
+              if (!cover.classList.contains('show')) {
+                // rAF 在后台标签页不触发，用 setTimeout 保证重排一定发生
+                setTimeout(rerenderHidden, 60);
+              }
+            }).observe(cover, { attributes: true, attributeFilter: ['class'] });
+          }
+
+          window.addEventListener('hashchange', function () {
+            setTimeout(rerenderHidden, 60);
+          });
+
+          // 封面里指向首页锚点的链接（站名 / 全书架构）不会触发路由变化，
+          // Docsify 也就不收起封面——这里手动收起，随后观察者会补渲染图形
+          document.addEventListener('click', function (ev) {
+            var a = ev.target && ev.target.closest ? ev.target.closest('.cover a') : null;
+            if (!a) return;
+            var href = a.getAttribute('href') || '';
+            if (/^#?\/(\?|$)/.test(href)) {
+              setTimeout(function () {
+                var c = document.querySelector('.cover.show');
+                if (c) c.classList.remove('show');
+              }, 80);
+            }
+          }, true);
 
           hook.doneEach(function () {
             if (typeof mermaid === 'undefined') return;
-            initMermaid();
+            ainseInitMermaid(ainseGetTheme() === 'dark');
 
             // Docsify wraps unrendered mermaid in <code class="lang-mermaid"> inside <pre>
             var codes = document.querySelectorAll(
@@ -129,6 +240,7 @@
               host.className = 'mermaid';
               host.id = id;
               host.textContent = source;
+              host.setAttribute('data-source', source);
               wrapper.appendChild(host);
               if (pre && pre.parentNode) {
                 pre.parentNode.replaceChild(wrapper, pre);
@@ -137,13 +249,147 @@
             });
 
             if (mermaidNodes.length) {
-              try {
-                mermaid.run({ nodes: mermaidNodes });
-              } catch (e) {
-                console.warn('mermaid render failed', e);
+              // 封面页（或封面尚未收起时）不做首绘：零尺寸布局会产出 NaN transform 的塌陷图；
+              // 封面收起由 watchCover / hashchange 的 rerenderHidden 统一补渲染
+              if (isCoverRoute() || document.querySelector('.cover.show')) {
+                mermaidNodes = [];
+              } else {
+                try {
+                  mermaid.run({ nodes: mermaidNodes });
+                } catch (e) {
+                  console.warn('mermaid render failed', e);
+                }
+                mermaidNodes = [];
               }
-              mermaidNodes = [];
             }
+
+            watchCover();
+          });
+        },
+        // 出版级 UI：主题切换 / 阅读进度条 / 宽屏右侧 TOC / 返回顶部
+        function uiPlugin(hook, vm) {
+          function applyTheme(t, rerender) {
+            var root = document.documentElement;
+            if (t === 'dark') root.setAttribute('data-theme', 'dark');
+            else root.removeAttribute('data-theme');
+            try { localStorage.setItem(AINSE_THEME_KEY, t); } catch (e) {}
+            var m = document.querySelector('meta[name="theme-color"]');
+            if (m) m.setAttribute('content', t === 'dark' ? '#0f1117' : '#4f46e5');
+            var btn = document.getElementById('btn-theme');
+            if (btn) btn.innerHTML = t === 'dark' ? AINSE_ICONS.sun : AINSE_ICONS.moon;
+            if (rerender) ainseRerenderMermaid(t === 'dark');
+          }
+
+          function buildToc() {
+            var toc = document.getElementById('page-toc');
+            if (!toc) return;
+            toc.innerHTML = '';
+            toc.classList.remove('has-items');
+            var heads = document.querySelectorAll('.markdown-section h2[id], .markdown-section h3[id]');
+            if (!heads.length || heads.length < 2) return;
+
+            var path = (vm && vm.route && vm.route.path) || '';
+            var frag = document.createDocumentFragment();
+            var title = document.createElement('p');
+            title.className = 'toc-title';
+            title.textContent = '本页目录';
+            frag.appendChild(title);
+
+            heads.forEach(function (h) {
+              var a = document.createElement('a');
+              a.href = '#' + path + '?id=' + encodeURIComponent(h.id);
+              a.textContent = h.textContent;
+              a.className = h.tagName === 'H3' ? 'toc-h3' : 'toc-h2';
+              a.setAttribute('data-target', h.id);
+              frag.appendChild(a);
+            });
+            toc.appendChild(frag);
+            toc.classList.add('has-items');
+          }
+
+          function updateTocActive() {
+            var toc = document.getElementById('page-toc');
+            if (!toc || !toc.classList.contains('has-items')) return;
+            var links = toc.querySelectorAll('a[data-target]');
+            if (!links.length) return;
+            var activeId = null;
+            links.forEach(function (a) {
+              var h = document.getElementById(a.getAttribute('data-target'));
+              if (h && h.getBoundingClientRect().top <= 120) activeId = a.getAttribute('data-target');
+            });
+            links.forEach(function (a) {
+              a.classList.toggle('active', a.getAttribute('data-target') === activeId);
+            });
+          }
+
+          function onScroll() {
+            var c = document.querySelector('.content');
+            if (!c) return;
+            var bar = document.getElementById('reading-progress');
+            if (bar) {
+              var max = c.scrollHeight - c.clientHeight;
+              var pct = max > 0 ? (c.scrollTop / max) * 100 : 0;
+              bar.style.width = pct.toFixed(2) + '%';
+            }
+            var topBtn = document.getElementById('btn-back-top');
+            if (topBtn) topBtn.classList.toggle('hidden', c.scrollTop < 480);
+            updateTocActive();
+          }
+
+          hook.init(function () {
+            if (document.getElementById('float-controls')) return;
+
+            var wrap = document.createElement('div');
+            wrap.className = 'float-controls';
+            wrap.id = 'float-controls';
+
+            var themeBtn = document.createElement('button');
+            themeBtn.className = 'float-btn';
+            themeBtn.id = 'btn-theme';
+            themeBtn.type = 'button';
+            themeBtn.title = '切换深色 / 浅色主题';
+            themeBtn.setAttribute('aria-label', '切换深色或浅色主题');
+            themeBtn.addEventListener('click', function () {
+              applyTheme(ainseGetTheme() === 'dark' ? 'light' : 'dark', true);
+            });
+            wrap.appendChild(themeBtn);
+
+            var topBtn = document.createElement('button');
+            topBtn.className = 'float-btn hidden';
+            topBtn.id = 'btn-back-top';
+            topBtn.type = 'button';
+            topBtn.title = '返回顶部';
+            topBtn.setAttribute('aria-label', '返回顶部');
+            topBtn.innerHTML = AINSE_ICONS.up;
+            topBtn.addEventListener('click', function () {
+              var c = document.querySelector('.content');
+              if (c) c.scrollTo({ top: 0, behavior: 'smooth' });
+              else window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+            wrap.appendChild(topBtn);
+
+            document.body.appendChild(wrap);
+
+            var bar = document.createElement('div');
+            bar.className = 'reading-progress';
+            bar.id = 'reading-progress';
+            document.body.appendChild(bar);
+
+            var toc = document.createElement('nav');
+            toc.className = 'page-toc';
+            toc.id = 'page-toc';
+            document.body.appendChild(toc);
+
+            applyTheme(ainseGetTheme(), false);
+
+            // scroll 事件不冒泡，但捕获阶段能听到 .content 的滚动
+            document.addEventListener('scroll', onScroll, true);
+            window.addEventListener('resize', onScroll);
+          });
+
+          hook.doneEach(function () {
+            buildToc();
+            onScroll();
           });
         },
       ],

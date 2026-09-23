@@ -23,7 +23,6 @@
     <p>输出与生效之间永远留一层人工缝隙；每次操作可审计。</p>
   </div>
 </div>
-
 ---
 
 ## 四个案例，一种共识
@@ -111,17 +110,62 @@ mindmap
 
 ## 九部分地图
 
-| 部分 | 主题 | 你将得到 |
-|:---:|:---:|:---|
-| 一 | 认知 | AI 原生边界、人在回路、人机分工、工程栈四支柱 |
-| 二 | 考古 | 大规模仓库画图、跨团队依赖、读懂祖传代码 |
-| 三 | 立界 | 目标架构、契约先行、边界测试、留缝五步 |
-| 四 | 重构 | 数据分家、接口拆分、立包迁移、设计令牌 |
-| 五 | 新功能 | 聊天独立域、多端 BFF、亿级削峰 |
-| 六 | 上线 | 五层门禁、风控三防线、对账回滚、合规红线 |
-| 七 | 治理 | 提示词归档、幻觉处理、ADR、组织与契约治理 |
-| 八 | 四案例 | 等权第一人称叙事 + 灰度发布锚点 |
-| 九 | 交叉收束 | 规模 × 治理密度 × 三原则加严形态 |
+<div class="home-part-grid">
+  <a class="home-part-card" href="manuscript/part-1-认知.md">
+    <img src="assets/part1-cognition.webp" alt="第一部分卷首艺术">
+    <span class="part-idx">壹</span>
+    <strong>认知</strong>
+    <span>AI 原生边界、人在回路、人机分工、工程栈四支柱</span>
+  </a>
+  <a class="home-part-card" href="manuscript/part-2-考古.md">
+    <img src="assets/part2-archaeology.webp" alt="第二部分卷首艺术">
+    <span class="part-idx">贰</span>
+    <strong>考古</strong>
+    <span>大规模仓库画图、跨团队依赖、读懂祖传代码</span>
+  </a>
+  <a class="home-part-card" href="manuscript/part-3-立界.md">
+    <img src="assets/part3-boundaries.webp" alt="第三部分卷首艺术">
+    <span class="part-idx">叁</span>
+    <strong>立界</strong>
+    <span>目标架构、契约先行、边界测试、留缝五步</span>
+  </a>
+  <a class="home-part-card" href="manuscript/part-4-重构.md">
+    <img src="assets/part4-refactoring.webp" alt="第四部分卷首艺术">
+    <span class="part-idx">肆</span>
+    <strong>重构</strong>
+    <span>数据分家、接口拆分、立包迁移、设计令牌</span>
+  </a>
+  <a class="home-part-card" href="manuscript/part-5-新功能.md">
+    <img src="assets/part5-newgrowth.webp" alt="第五部分卷首艺术">
+    <span class="part-idx">伍</span>
+    <strong>新功能</strong>
+    <span>聊天独立域、多端 BFF、亿级削峰</span>
+  </a>
+  <a class="home-part-card" href="manuscript/part-6-上线.md">
+    <img src="assets/part6-launch.webp" alt="第六部分卷首艺术">
+    <span class="part-idx">陆</span>
+    <strong>上线</strong>
+    <span>五层门禁、风控三防线、对账回滚、合规红线</span>
+  </a>
+  <a class="home-part-card" href="manuscript/part-7-治理.md">
+    <img src="assets/part7-governance.webp" alt="第七部分卷首艺术">
+    <span class="part-idx">柒</span>
+    <strong>治理</strong>
+    <span>提示词归档、幻觉处理、ADR、组织与契约治理</span>
+  </a>
+  <a class="home-part-card" href="manuscript/part-8-四案例.md">
+    <img src="assets/part8-fourcases.webp" alt="第八部分卷首艺术">
+    <span class="part-idx">捌</span>
+    <strong>四案例</strong>
+    <span>等权第一人称叙事 + 灰度发布锚点</span>
+  </a>
+  <a class="home-part-card" href="manuscript/part-9-交叉收束.md">
+    <img src="assets/part9-convergence.webp" alt="第九部分卷首艺术">
+    <span class="part-idx">玖</span>
+    <strong>交叉收束</strong>
+    <span>规模 × 治理密度 × 三原则加严形态</span>
+  </a>
+</div>
 
 ---
 

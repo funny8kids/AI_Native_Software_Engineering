@@ -1,6 +1,6 @@
 <!-- _coverpage.md — Cover page for 《AI 原生软件工程》 -->
 
-![cover](assets/cover.webp)
+<img class="cover-art" src="assets/cover-ainse.webp" alt="《AI 原生软件工程》封面艺术"/>
 
 # AI 原生软件工程
 
