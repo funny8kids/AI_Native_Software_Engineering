@@ -101,6 +101,26 @@
         → 入仓库 → 各端排期 → 五端契约 CI 跑通方可上线
 ```
 
+```mermaid
+flowchart TB
+  RFC[提案 RFC] --> DRAFT[契约草稿<br/>AI 生成 + 人审]
+  DRAFT --> GRADE{兼容性分级<br/>由契约 Owner 定}
+  GRADE -->|兼容性 MINOR/PATCH| OWN[契约 Owner 审核]
+  OWN --> MERGE1[入仓库] --> NOTIFY[自动通知各端]
+  GRADE -->|破坏性 MAJOR| SIGN[多端负责人签字<br/>时限内未否决视为同意]
+  SIGN --> RISK{涉及资金？}
+  RISK -->|是| RSK[风控会签<br/>不可过期视同同意]
+  RISK -->|否| CI5
+  RSK --> CI5[五端契约 CI]
+  CI5 -->|全绿| ONLINE[允许上线]
+  CI5 -->|任一端红| BLOCK[PR 不可合并]
+  style BLOCK fill:#fef2f2,stroke:#dc2626,color:#1a1d23
+  style ONLINE fill:#ecfdf5,stroke:#059669,color:#1a1d23
+  style GRADE fill:#eef2ff,stroke:#4f46e5,color:#1a1d23
+```
+
+**图 I-1｜契约变更分级流程** — 分级与签字权在人，CI 只负责把「没签字」变成机器可拒绝的事实。
+
 ### 5.2 各步责任人（必须人定，AI 不得代填）
 | 步骤 | 责任人 | 备选（缺席时） |
 |------|--------|----------------|
@@ -134,6 +154,21 @@
 
 ### 6.4 代价记录
 端侧 CI 时长增加 <18>%；该代价计入数字清单，不藏。
+
+```mermaid
+flowchart LR
+  MERGE[契约仓库合并] --> STUB[类型桩重新生成<br/>可 AI 辅助]
+  STUB --> TEST[契约测试<br/>mock 对真实契约]
+  TEST --> SCAN[破坏性影响扫描]
+  SCAN --> E1[安卓] & E2[鸿蒙] & E3[iOS] & E4[Web] & E5[小程序]
+  E1 & E2 & E3 & E4 & E5 --> GATE{五端全绿？}
+  GATE -->|是| OK[PR 可合并 · 可上线]
+  GATE -->|任一端红或无签字| NO[阻断]
+  style NO fill:#fef2f2,stroke:#dc2626,color:#1a1d23
+  style OK fill:#ecfdf5,stroke:#059669,color:#1a1d23
+```
+
+**图 I-2｜五端契约同步与拦截** — 契约的一致性不靠通知与自觉，靠五端 CI 的一次全绿判定。
 
 ---
 

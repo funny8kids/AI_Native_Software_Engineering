@@ -1,7 +1,7 @@
 # 阅读指南
 
 > 如何高效阅读这本书，取决于你从哪里来。  
-> 先读 [这本书是什么](manuscript/03-这本书是什么.md)：书名偏「AI 工程」，正文主线是**组织如何接管**。
+> 先读 [这本书是什么](manuscript/ch01-这本书是什么.md)：书名偏「AI 工程」，正文主线是**组织如何接管**。
 
 ---
 
@@ -11,33 +11,33 @@
 
 你最关心的是**治理框架如何落地**。推荐路径：
 
-0. [90 天总路线图](manuscript/04-90天总路线图.md) — 季度作战图  
+0. [90 天总路线图](manuscript/ch02-90天总路线图.md) — 季度作战图  
 1. [全书总览](manuscript/README.md) — 把握结构  
-2. [第 1 章 · AI 原生不是让 AI 写代码](manuscript/16-第1章-AI原生不是让AI写代码.md)  
-3. [第 9 章 · 契约先行](manuscript/19-第9章-契约先行.md)  
-4. [第 2 章 · 人在回路](manuscript/11-第2章-人在回路.md)  
-5. [第 11 章 · 留缝](manuscript/12-第11章-留缝.md)  
-6. [第 26 章 · 组织治理](manuscript/13-第26章-组织治理.md) → [第 27 章 · 契约治理](manuscript/14-第27章-契约治理.md)  
-7. 选一个与你规模最接近的案例：[案例一](manuscript/44-案例一-300人电商平台.md) / [案例二](manuscript/45-案例二-海星交易所.md) / [案例三](manuscript/46-案例三-暗流资本.md) / [案例四](manuscript/47-案例四-守夜人科技.md)  
-8. 成本与系统面 → [附录 J](manuscript/41-附录J-AI系统工程.md)
+2. [第 1 章 · AI 原生不是让 AI 写代码](manuscript/ch06-第1章-AI原生不是让AI写代码.md)  
+3. [第 9 章 · 契约先行](manuscript/ch14-第9章-契约先行.md)  
+4. [第 2 章 · 人在回路](manuscript/ch07-第2章-人在回路.md)  
+5. [第 11 章 · 留缝](manuscript/ch16-第11章-留缝.md)  
+6. [第 26 章 · 组织治理](manuscript/ch31-第26章-组织治理.md) → [第 27 章 · 契约治理](manuscript/ch32-第27章-契约治理.md)  
+7. 选一个与你规模最接近的案例：[案例一](manuscript/ch34-案例一-300人电商平台.md) / [案例二](manuscript/ch35-案例二-海星交易所.md) / [案例三](manuscript/ch36-案例三-暗流资本.md) / [案例四](manuscript/ch37-案例四-守夜人科技.md)  
+8. 成本与系统面 → [附录 J](manuscript/ch41-附录J-AI系统工程.md)
 
 ### 路径 B：一线工程师 / 架构师
 
 你最关心的是**实践细节和技术栈**。推荐路径：
 
-0. [附录 K · 一线最小实践包](manuscript/42-附录K-一线最小实践包.md) — 一页可抄  
-1. [第 1 章](manuscript/16-第1章-AI原生不是让AI写代码.md) → [第 4 章 · 工程栈](manuscript/18-第4章-AI原生工程栈.md)
-2. [第三部分 · 立界](manuscript/20-第8章-目标架构.md)（第 8–11 章）
-3. [第四部分 · 重构](manuscript/25-第12章-数据与日志分家.md)（第 12–15 章）
-4. [第 19 章 · 五层门禁](manuscript/32-第19章-五层门禁.md) → [第 23 章 · 提示词](manuscript/37-第23章-提示词工程与归档.md)
-5. [案例一](manuscript/44-案例一-300人电商平台.md) 或 [案例二](manuscript/45-案例二-海星交易所.md)
+0. [附录 K · 一线最小实践包](manuscript/ch42-附录K-一线最小实践包.md) — 一页可抄  
+1. [第 1 章](manuscript/ch06-第1章-AI原生不是让AI写代码.md) → [第 4 章 · 工程栈](manuscript/ch09-第4章-AI原生工程栈.md)
+2. [第三部分 · 立界](manuscript/ch13-第8章-目标架构.md)（第 8–11 章）
+3. [第四部分 · 重构](manuscript/ch17-第12章-数据与日志分家.md)（第 12–15 章）
+4. [第 19 章 · 五层门禁](manuscript/ch24-第19章-五层门禁.md) → [第 23 章 · 提示词](manuscript/ch28-第23章-提示词工程与归档.md)
+5. [案例一](manuscript/ch34-案例一-300人电商平台.md) 或 [案例二](manuscript/ch35-案例二-海星交易所.md)
 
 ### 路径 C：研究者 / 教育者
 
-1. [这本书是什么](manuscript/03-这本书是什么.md)  
+1. [这本书是什么](manuscript/ch01-这本书是什么.md)  
 2. 地基三件套 + 第一至七部分按序  
-3. 四案例 + [第 33 章](manuscript/48-第33章-四案例交叉启示.md)  
-4. [公开证据档案](public-evidence.md) 与 [附录 J](manuscript/41-附录J-AI系统工程.md)
+3. 四案例 + [第 33 章](manuscript/ch38-第33章-四案例交叉启示.md)  
+4. [公开证据档案](public-evidence.md) 与 [附录 J](manuscript/ch41-附录J-AI系统工程.md)
 
 ---
 

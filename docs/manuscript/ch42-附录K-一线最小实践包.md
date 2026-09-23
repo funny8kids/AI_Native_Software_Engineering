@@ -15,6 +15,22 @@
 6. **灰度**：没有 1% 档就不要直接 100%  
 7. **出事第一动作**：止血（降级/冻结/回滚），禁止顺手再改一段  
 
+```mermaid
+flowchart LR
+  CARD[Prompt 作战卡<br/>目标 · 不可碰 · 契约片段] --> PR[PR 模板<br/>AI 参与范围 + 回滚]
+  PR --> REV[评审 6 问<br/>推测与事实分开]
+  REV --> CI[契约 / 分层 CI]
+  CI -->|绿| REL[1% 灰度起步]
+  CI -->|红| FIX[回卡重写约束]
+  REL -->|刹车命中| INC[事故当夜清单]
+  INC -.->|次日 ADR| CARD
+  FIX -.-> CARD
+  style REL fill:#ecfdf5,stroke:#059669,color:#1a1d23
+  style INC fill:#fef2f2,stroke:#dc2626,color:#1a1d23
+```
+
+**图 K-1｜一线日常最小闭环** — 作战卡 → PR → 评审 → CI → 灰度 → 事故回灌，一张纸画得下，也一天做得完。
+
 ---
 
 ## K.2 Prompt 作战卡
@@ -91,6 +107,23 @@ Prompt 或任务 ID：
 5. 禁止：未授权「再修一把」
 6. 次日：ADR 草稿 + 是否收紧边界
 ```
+
+```mermaid
+sequenceDiagram
+  participant E as 一线工程师（发现者）
+  participant S as SRE
+  participant R as 风控 / 合规
+  participant D as 决策层
+  E->>E: 定性：钱 / 用户 / 合规 / 权限
+  E->>S: 止血请求（降级 > 冻结 > 回滚）
+  S-->>E: 执行并确认已止
+  E->>R: 同步存证（镜像 · 日志 · 对账快照）
+  R->>D: 业务与合规影响上报
+  Note over E,D: 禁止未授权「再修一把」
+  D->>E: 次日 ADR 草稿 + 边界是否收紧
+```
+
+**图 K-2｜事故当夜的动作顺序** — 先止血再存证再通知；改代码的冲动排在最后，且需要授权。
 
 ---
 

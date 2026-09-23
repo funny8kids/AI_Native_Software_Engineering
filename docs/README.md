@@ -28,7 +28,7 @@
 ## 四个案例，一种共识
 
 <div class="home-case-grid">
-  <a class="case-card" href="manuscript/44-案例一-300人电商平台.md">
+  <a class="case-card" href="manuscript/ch34-案例一-300人电商平台.md">
     <img src="assets/case-ecommerce.webp" alt="案例一 电商平台">
     <div class="case-card-body">
       <span class="case-badge">案例一 · 300 人</span>
@@ -37,7 +37,7 @@
       <span class="case-cta">进入叙事 →</span>
     </div>
   </a>
-  <a class="case-card" href="manuscript/45-案例二-海星交易所.md">
+  <a class="case-card" href="manuscript/ch35-案例二-海星交易所.md">
     <img src="assets/case-exchange.webp" alt="案例二 海星交易所">
     <div class="case-card-body">
       <span class="case-badge">案例二 · 2300 人</span>
@@ -46,7 +46,7 @@
       <span class="case-cta">进入叙事 →</span>
     </div>
   </a>
-  <a class="case-card" href="manuscript/46-案例三-暗流资本.md">
+  <a class="case-card" href="manuscript/ch36-案例三-暗流资本.md">
     <img src="assets/case-quant.webp" alt="案例三 暗流资本">
     <div class="case-card-body">
       <span class="case-badge">案例三 · 32 人</span>
@@ -55,7 +55,7 @@
       <span class="case-cta">进入叙事 →</span>
     </div>
   </a>
-  <a class="case-card" href="manuscript/47-案例四-守夜人科技.md">
+  <a class="case-card" href="manuscript/ch37-案例四-守夜人科技.md">
     <img src="assets/case-agent.webp" alt="案例四 守夜人科技">
     <div class="case-card-body">
       <span class="case-badge">案例四 · 10 人</span>
@@ -172,11 +172,11 @@ mindmap
 ## 从哪里开始
 
 <div class="path-row">
-  <a class="path-card" href="manuscript/03-这本书是什么.md">
+  <a class="path-card" href="manuscript/ch01-这本书是什么.md">
     <strong>这本书是什么</strong>
     <span>先对齐定位与边界</span>
   </a>
-  <a class="path-card" href="manuscript/04-90天总路线图.md">
+  <a class="path-card" href="manuscript/ch02-90天总路线图.md">
     <strong>90 天路线图</strong>
     <span>季度作战与验收</span>
   </a>
@@ -184,21 +184,21 @@ mindmap
     <strong>阅读指南</strong>
     <span>按角色选路径</span>
   </a>
-  <a class="path-card" href="manuscript/42-附录K-一线最小实践包.md">
+  <a class="path-card" href="manuscript/ch42-附录K-一线最小实践包.md">
     <strong>一线最小包</strong>
     <span>一页可抄</span>
   </a>
 </div>
 
-- 想先看案例 → [四案例时间线](manuscript/00-案例时间线.md)  
-- 系统面（eval / 成本 / 权限）→ [附录 J](manuscript/41-附录J-AI系统工程.md)  
+- 想先看案例 → [四案例时间线](manuscript/ch03-案例时间线.md)  
+- 系统面（eval / 成本 / 权限）→ [附录 J](manuscript/ch41-附录J-AI系统工程.md)  
 - 全书骨架 → [总览](manuscript/README.md)
 
 ---
 
 ## 证据边界
 
-四案例均为**自洽虚构的脱敏示范案例**，不指代任何真实公司或个人。数字以 [数字清单](manuscript/02-数字清单.md) 为唯一事实来源。正文引用时不得把案例当作真实记录陈述。
+四案例均为**自洽虚构的脱敏示范案例**，不指代任何真实公司或个人。数字以 [数字清单](manuscript/ch05-数字清单.md) 为唯一事实来源。正文引用时不得把案例当作真实记录陈述。
 
 理论章另附**公开参照**（DORA、NIST、GitHub 企业研究等），详见 [公开证据档案](public-evidence.md) 与 [延伸阅读](references.md)。外部资料只做框架对照，不给虚构事故数字背书。
 

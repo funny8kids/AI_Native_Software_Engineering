@@ -67,6 +67,44 @@
 | 核心 | 短文记录架构显著决策：Title / Context / Decision / Status / Consequences；进仓库版本管理；被取代保留并标记 superseded |
 | 与本书关系 | 第 25 章 ADR 治理的原始公开出处 |
 
+## E7 · DORA：AI 辅助研发的 ROI
+
+| 项 | 内容 |
+|---|---|
+| 标题 | ROI of AI-assisted Software Development |
+| 发布方 | Google Cloud / DORA |
+| 链接 | https://dora.dev/ai/roi/report/ （正文与 references 用此 DORA 站内地址；出版方页面：https://cloud.google.com/resources/content/dora-roi-of-ai-assisted-software-development） |
+| 与本书关系 | 附录 J 的「ROI 框架不替代你自己的账」出处；与 E1 的放大器结论同向 |
+| 使用限制 | 厂商与机构联合发布，用作讨论框架，不当作独立审计结论 |
+
+## 外链可达性台账（编辑部实测）
+
+> 方法：脚本枚举 `docs/**/*.md` 的全部 http(s) 链接并去重，逐条发 HTTP 请求记录状态码；
+> 本机网络对个别站点的超时**不判死链**，改用第二通道（独立抓取 / 浏览器请求）复核后才定性。
+> 核验日期：2026-09-24。结果：去重后 **17 条**，**16 条直连 200**（含复测后成功的 import-linter）、**1 条为反爬拦截但资源确认在线**（已把正文引用改指可直连地址）、**0 条死链**。
+
+| 链接 | 结果 | 备注 |
+|---|---|---|
+| dora.dev/research/ | 200 | 研究档案入口 |
+| dora.dev/research/2025/dora-report/ | 200 | E1（页面标题实测为 State of AI-assisted Software Development 2025） |
+| dora.dev/ai/roi/report/ | 200 | E7，正文引用地址 |
+| dora.dev/insights/trust-in-ai/ | 200 | E2 |
+| dora.dev/insights/concerns-beyond-accuracy-of-ai-output/ | 200 | E3 |
+| nist.gov/itl/ai-risk-management-framework | 200 | E4 |
+| nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf | 200 | E4 原文 PDF |
+| github.blog（首页） | 200 | 出版方 |
+| github.blog/news-insights/research/research-quantifying-github-copilots-impact-in-the-enterprise-with-accenture/ | 200 | E5 |
+| cognitect.com/blog/2011/11/15/documenting-architecture-decisions | 200 | E6 |
+| www.openapis.org/ | 200 | 契约工具 |
+| buf.build/ | 200 | 契约工具 |
+| book.getfoundry.sh/ | 200 | 案例二测试工具 |
+| github.com | 200 | 泛域引用 |
+| github.com/oasdiff/oasdiff | 200 | 工具引用；**本轮由旧路径 `Tufin/oasdiff` 更正**（仓库已迁组织，旧路径仅靠重定向可达） |
+| github.com/seddonym/import-linter | 200 | 首轮本机超时，复测直连成功 |
+| cloud.google.com/resources/content/dora-roi-of-ai-assisted-software-development | 自动化请求被拒（本机超时 / 浏览器 403），资源本身确认在线 | 三个读数：本机 urllib 超时、浏览器请求 403、公开检索命中该页且标题一致（DORA: ROI of AI-assisted Software Development）。据此判定为**反爬拦截而非死链**；正文与 references 一律引用可直连的 DORA 站内地址 |
+
+**结论**：无失效链接，本轮不新增 `[待核实]` 标注（BOOK_SPEC 的 `[待核实]` 机制保留，用于将来不可核的引用）。
+
 ## 与四案例的边界
 
 | 可以 | 不可以 |

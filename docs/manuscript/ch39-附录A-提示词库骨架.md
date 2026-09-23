@@ -19,6 +19,29 @@
 | P-23-* | 提示词归档与复用 | 版本与回归 |
 | P-24-* | 评审与幻觉 | 雷达不可当法官 |
 
+```mermaid
+flowchart LR
+  FAIL[遇到一次失灵<br/>不知用什么约束 AI] --> Q1{失灵在哪一层？}
+  Q1 -->|该不该用 AI| F1[P-1 / P-3<br/>认知与分工]
+  Q1 -->|不知道该叫谁| F2[P-2<br/>介入与点名]
+  Q1 -->|结论分不清真假| F3[P-5 / P-7<br/>考古与事实标注]
+  Q1 -->|改动会不会破坏别人| F4[P-9 / P-27<br/>契约与签字]
+  Q1 -->|上线没刹车| F5[P-19 / P-28<br/>门禁与灰度]
+  Q1 -->|提示词越攒越乱| F6[P-23<br/>归档与回归]
+  Q1 -->|评审意见不可信| F7[P-24<br/>雷达与法官分离]
+  F1 --> LIB[回到分类速查表<br/>取对应前缀的条目]
+  F2 --> LIB
+  F3 --> LIB
+  F4 --> LIB
+  F5 --> LIB
+  F6 --> LIB
+  F7 --> LIB
+  style FAIL fill:#fef2f2,stroke:#dc2626,color:#1a1d23
+  style LIB fill:#ecfdf5,stroke:#059669,color:#1a1d23
+```
+
+**图 A-1｜按失灵模式反查提示词** — 库不是按章号翻，是按「这次 AI 在哪失灵的」反查；组织接管从选对约束开始。
+
 ---
 
 ---
@@ -40,6 +63,18 @@ ai_response_summary: <AI 回复摘要>   # 待填充
 outcome:      <最终结果>             # 待填充
 status:       skeleton | used | retired
 ```
+
+```mermaid
+stateDiagram-v2
+  [*] --> skeleton: 只填骨架字段
+  skeleton --> used: 真实/自洽场景跑过<br/>回填回复摘要与结局
+  used --> retired: 被更好版本替代<br/>或该约束已门禁化
+  skeleton --> [*]: 跑不出结果即废弃<br/>禁止只留模板
+  retired --> [*]
+  note right of used: 正文引用必须带 id<br/>并注明用在哪一章
+```
+
+**图 A-2｜提示词条目生命周期** — `status` 三态里只有「跑过并回填」才算进库；未验证的模板是库的负债，不是资产。
 
 ---
 
@@ -554,7 +589,7 @@ objective: 输出可发布的对比数字
 prompt: |
   基于 <数字清单>，生成本案例治理前后对比表，标注每个数字的数据来源与置信度。
   凡未度量的指标，标"未度量"，不得臆造基线。
-must_intervene: 数字须与 02-数字清单.md 完全一致
+must_intervene: 数字须与 ch05-数字清单.md 完全一致
 status: skeleton
 ```
 

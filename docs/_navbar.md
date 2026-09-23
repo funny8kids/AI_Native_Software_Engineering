@@ -1,5 +1,5 @@
 - [主页](/)
 - [📖 阅读指南](/guide.md)
 - [📚 全书总览](/manuscript/README.md)
-- [🗺 四案例时间线](/manuscript/00-案例时间线.md)
+- [🗺 四案例时间线](/manuscript/ch03-案例时间线.md)
 - [🔎 搜索](?q=)

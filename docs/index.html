@@ -64,13 +64,26 @@
           };
     }
 
+    // 甘特图在 mermaid 内部按「宿主父元素的 offsetWidth」定宽；本主题的 .mermaid
+    // 由插件在 doneEach 里动态生成，那一刻量到的是包裹层而非正文列宽，实测恒为 300px
+    // （四案例时间线被压成一小块）。这里显式喂 useWidth = 正文列宽，并在极端窄屏兜底。
+    function ainseGanttWidth() {
+      var sec = document.querySelector('.markdown-section');
+      if (!sec) return 720;
+      var probe = sec.querySelector('p, li, h2, td');
+      var w = (probe && probe.offsetWidth) || sec.clientWidth || 0;
+      if (!w) return 720; // 只在量不到时兜底（零尺寸布局：后台标签页 / 打印）
+      return Math.min(Math.max(w, 300), 1200);
+    }
+
     function ainseInitMermaid(dark) {
       if (typeof mermaid === 'undefined') return;
       mermaid.initialize({
         startOnLoad: false,
         securityLevel: 'loose',
         theme: 'neutral',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Hiragino Sans GB", sans-serif',
+        gantt: { useWidth: ainseGanttWidth() },
         flowchart: { curve: 'basis', htmlLabels: true },
         themeVariables: ainseMermaidVars(dark),
       });

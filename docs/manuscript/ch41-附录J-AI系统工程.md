@@ -123,7 +123,7 @@ flowchart LR
 ```
 
 **没有返工与事故项的 ROI 表格，直接扔掉。**  
-[DORA ROI of AI-assisted development](https://cloud.google.com/resources/content/dora-roi-of-ai-assisted-software-development) 提供公开讨论框架，不替代你的账。
+[DORA ROI of AI-assisted development](https://dora.dev/ai/roi/report/) 提供公开讨论框架，不替代你的账。
 
 ### 观测最小集
 

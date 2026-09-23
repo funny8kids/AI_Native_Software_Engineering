@@ -40,3 +40,6 @@ jspm_packages/
 .env
 .env.local
 .env.*.local
+# Python bytecode from guard scripts
+__pycache__/
+*.pyc

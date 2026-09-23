@@ -39,7 +39,7 @@ FIGURE_LIST.md        # 配图清单
 
 **诊断 → 补真实素材 → AI 扩写 → 作者精修 → 配图 → 事实核查 → 风格审校**
 
-边界见 `BOOK_SPEC.md`。四案例为自洽虚构脱敏示范，数字以 `docs/manuscript/02-数字清单.md` 为准。
+边界见 `BOOK_SPEC.md`。四案例为自洽虚构脱敏示范，数字以 `docs/manuscript/ch05-数字清单.md` 为准。
 
 ## 一句话
 

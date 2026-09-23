@@ -10,17 +10,17 @@
   </div>
   <p class="part-lead">本部分处理大规模遗留系统的考古方法：盘点数百个仓库、画四张图，用 WIRED/NOT WIRED 剖开依赖真相，再让 AI 辅助读懂祖传代码。一条红线贯穿始终：AI 加速的是数据收集，判断永远归人。</p>
   <div class="part-chapters">
-    <a class="part-chapter-card" href="#/manuscript/22-第5章-大规模考古画图.md">
+    <a class="part-chapter-card" href="#/manuscript/ch10-第5章-大规模考古画图.md">
       <span class="ch-no">第 5 章</span>
       <span class="ch-title">大规模考古画图</span>
       <span class="ch-desc">大规模仓库盘点；四张图</span>
     </a>
-    <a class="part-chapter-card" href="#/manuscript/23-第6章-跨团队依赖分析.md">
+    <a class="part-chapter-card" href="#/manuscript/ch11-第6章-跨团队依赖分析.md">
       <span class="ch-no">第 6 章</span>
       <span class="ch-title">跨团队依赖分析</span>
       <span class="ch-desc">循环依赖、反向依赖、孤儿模块、WIRED/NOT WIRED</span>
     </a>
-    <a class="part-chapter-card" href="#/manuscript/24-第7章-AI读懂祖传代码.md">
+    <a class="part-chapter-card" href="#/manuscript/ch12-第7章-AI读懂祖传代码.md">
       <span class="ch-no">第 7 章</span>
       <span class="ch-title">AI 读懂祖传代码</span>
       <span class="ch-desc">三种考古法；AI 把推测写成确定</span>
