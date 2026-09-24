@@ -15,7 +15,7 @@ flowchart TB
   BFF3 --> SHARED
   BFF4 --> SHARED
   SHARED --> CORE[交易 / 商品核心]
-  style SHARED fill:#f1ece1,stroke:#2f6154,color:#1e1c19
+  style SHARED fill:#f1ebde,stroke:#2f6154,color:#1e1c19
 ```
 
 **图 17-1｜多端 BFF** — 一份领域契约，多端翻译层各自适配；业务不重复进 BFF。

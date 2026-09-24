@@ -10,7 +10,7 @@ flowchart LR
   CUT --> S[service<br/>业务规则]
   CUT --> RP[repository<br/>数据访问]
   NG[nginx / 网关] --> R
-  style CUT fill:#f8efdf,stroke:#9d6127,color:#1e1c19
+  style CUT fill:#fcefd3,stroke:#9d6127,color:#1e1c19
 ```
 
 **图 13-1｜拆分一刀切在职责** — AI 按函数相似度拆会更纠缠；边界由人定。
@@ -117,9 +117,9 @@ flowchart LR
   CMP -->|异常| BACK[立即回切全量<br/>退回老入口]
   CMP -->|正常| UP[逐步放大新服务比例]
   UP --> NG
-  style NG fill:#f1ece1,stroke:#2f6154,color:#1e1c19
-  style BACK fill:#f7e8e3,stroke:#a03b31,color:#1e1c19
-  style UP fill:#e9f1e6,stroke:#3e7247,color:#1e1c19
+  style NG fill:#f1ebde,stroke:#2f6154,color:#1e1c19
+  style BACK fill:#ffe3df,stroke:#a03b31,color:#1e1c19
+  style UP fill:#e2f3df,stroke:#3e7247,color:#1e1c19
 ```
 
 **图 13-2｜nginx 灰度切流回路** — 小比例起步、对比监控、异常回切；切得回来，才敢切出去。

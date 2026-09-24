@@ -116,9 +116,9 @@ flowchart TB
   RSK --> CI5[五端契约 CI]
   CI5 -->|全绿| ONLINE[允许上线]
   CI5 -->|任一端红| BLOCK[PR 不可合并]
-  style BLOCK fill:#f7e8e3,stroke:#a03b31,color:#1e1c19
-  style ONLINE fill:#e9f1e6,stroke:#3e7247,color:#1e1c19
-  style GRADE fill:#f1ece1,stroke:#2f6154,color:#1e1c19
+  style BLOCK fill:#ffe3df,stroke:#a03b31,color:#1e1c19
+  style ONLINE fill:#e2f3df,stroke:#3e7247,color:#1e1c19
+  style GRADE fill:#f1ebde,stroke:#2f6154,color:#1e1c19
 ```
 
 **图 I-1｜契约变更分级流程** — 分级与签字权在人，CI 只负责把「没签字」变成机器可拒绝的事实。
@@ -168,8 +168,8 @@ flowchart LR
   E1 & E2 & E3 & E4 & E5 --> GATE{五端全绿？}
   GATE -->|是| OK[PR 可合并 · 可上线]
   GATE -->|任一端红或无签字| NO[阻断]
-  style NO fill:#f7e8e3,stroke:#a03b31,color:#1e1c19
-  style OK fill:#e9f1e6,stroke:#3e7247,color:#1e1c19
+  style NO fill:#ffe3df,stroke:#a03b31,color:#1e1c19
+  style OK fill:#e2f3df,stroke:#3e7247,color:#1e1c19
 ```
 
 **图 I-2｜五端契约同步与拦截** — 契约的一致性不靠通知与自觉，靠五端 CI 的一次全绿判定。

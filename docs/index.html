@@ -6,7 +6,9 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
   <meta name="description" content="《AI 原生软件工程》—— 当 AI 自己兜不住的时候，组织如何接管。四个真实案例，一套治理方法论。">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
-  <meta name="theme-color" content="#efeae0">
+  <!-- 这一格是浅档 --c-desk 的抄件（第八条守卫按令牌名逐字对账，动过 theme.css 就要动这里）；
+       运行时 applyTheme 会按当前档把它改写成实时的 --c-desk，但首屏渲染前浏览器读的是本行。 -->
+  <meta name="theme-color" content="#f7f5f0">
 
   <!-- 主题在首屏渲染前应用，避免深色闪烁。默认浅色；仅当用户明确选过深色才提前设置 -->
   <script>
@@ -50,10 +52,10 @@
     // 就会静默变成 'transparent'，站在暖纸上是一张没有底的图。
     // 值全部取浅档——theme.css 没加载时深档同样不存在，这是唯一自洽的兜底口径。
     var AINSE_FIG_FALLBACK = {
-      '--c-plate-node': '#f1ece1', '--c-plate': '#fbf8f1', '--c-plate-onblack': '#fefcf8',
+      '--c-plate-node': '#f1ebde', '--c-plate': '#fbf8f1', '--c-plate-onblack': '#fefcf8',
       '--c-plate-ink': '#1e1c19', '--c-plate-accent': '#2f6154', '--c-plate-line': '#6e675c',
-      '--c-plate-green': '#e9f1e6', '--c-plate-orange': '#faece4', '--c-plate-purple': '#f1ecf2',
-      '--c-plate-amber': '#f8efdf', '--c-plate-red': '#f7e8e3', '--c-plate-gray': '#eee8dc',
+      '--c-plate-green': '#e2f3df', '--c-plate-orange': '#ffeada', '--c-plate-purple': '#f5e9f9',
+      '--c-plate-amber': '#fcefd3', '--c-plate-red': '#ffe3df', '--c-plate-gray': '#e5ddd0',
       '--c-plate-red-line': '#a03b31', '--c-plate-black-line': '#141310',
       '--c-desk': '#f7f5f0', '--c-accent': '#2b7159'
     };
@@ -150,6 +152,9 @@
       return Math.min(Math.max(w, narrow ? 600 : 300), 1200);
     }
 
+    // dark 参数**不**喂给 mermaid：这里固定用 neutral 主题，深浅两套配色由 ainseMermaidVars()
+    // 现读页面计算值（getComputedStyle 取 --c-plate-*）灌进 themeVariables。所以换档时图必须
+    // 重绘一次（ainseRerenderMermaid）——不是为了让 mermaid 换具名主题，是为了让它重读一遍令牌。
     function ainseInitMermaid(dark) {
       if (typeof mermaid === 'undefined') return;
       mermaid.initialize({
@@ -645,6 +650,28 @@
             // scroll 事件不冒泡，但捕获阶段能听到 .content 的滚动
             document.addEventListener('scroll', onScroll, true);
             window.addEventListener('resize', onScroll);
+
+            // 键盘焦点的横向揭示。浏览器会把 Tab 走到的控件滚进**纵向**滚动容器
+            // （1280 档实测：走到侧栏最后几条时 .sidebar 自己滚了），但实测**不会**为横向滚动
+            // 容器做同一件事：390 档顶栏是一条 overflow-x:auto 的导航带（滚动口 12..378、内容宽
+            // 428），Tab 到最右的「🔎 搜索」时该链接停在 x=375..440，focusin 里连一次 scroll
+            // 事件都没有（监听器实测计数为空），焦点环被裁到只剩左侧 2px。
+            // 这里的补法只碰"焦点所在的那一条横向滚动带"：纵向不动它（那是浏览器已经做对的部分），
+            // 也不给带子换布局（窄屏导航条不换行是既定设计，见 theme.css 的同名注释）。
+            // 余量 6px = 环宽 2 + offset 2 + 2，让整条环落在滚动口内而不是刚够到边。
+            document.addEventListener('focusin', function (e) {
+              var el = e && e.target;
+              if (!el || !el.getBoundingClientRect) return;
+              for (var p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+                var ox = getComputedStyle(p).overflowX;
+                if (ox !== 'auto' && ox !== 'scroll') continue;
+                var a = el.getBoundingClientRect(), s = p.getBoundingClientRect();
+                var dx = 0;
+                if (a.right > s.right) dx = a.right - s.right + 6;
+                else if (a.left < s.left) dx = a.left - s.left - 6;
+                if (dx) p.scrollLeft += dx;
+              }
+            });
           });
 
           hook.doneEach(function () {

@@ -81,9 +81,9 @@ flowchart LR
   D --> E[人类审查]
   E --> F[部署与可观测]
   F -->|回灌约束| B
-  style A fill:#f1ece1,stroke:#2f6154,color:#1e1c19
-  style E fill:#f8efdf,stroke:#9d6127,color:#1e1c19
-  style F fill:#e9f1e6,stroke:#3e7247,color:#1e1c19
+  style A fill:#f1ebde,stroke:#2f6154,color:#1e1c19
+  style E fill:#fcefd3,stroke:#9d6127,color:#1e1c19
+  style F fill:#e2f3df,stroke:#3e7247,color:#1e1c19
 ```
 
 **图 HM-1｜AI 原生交付闭环** — 生成可以自动，生效必须过评估与人审，观测再回灌成下一轮上下文。

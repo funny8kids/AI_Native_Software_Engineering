@@ -38,8 +38,8 @@ flowchart LR
   F5 --> LIB
   F6 --> LIB
   F7 --> LIB
-  style FAIL fill:#f7e8e3,stroke:#a03b31,color:#1e1c19
-  style LIB fill:#e9f1e6,stroke:#3e7247,color:#1e1c19
+  style FAIL fill:#ffe3df,stroke:#a03b31,color:#1e1c19
+  style LIB fill:#e2f3df,stroke:#3e7247,color:#1e1c19
 ```
 
 **图 A-1｜按失灵模式反查提示词** — 库不是按章号翻，是按「这次 AI 在哪失灵的」反查；组织接管从选对约束开始。

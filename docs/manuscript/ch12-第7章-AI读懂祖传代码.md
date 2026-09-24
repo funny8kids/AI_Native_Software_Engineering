@@ -12,8 +12,8 @@ flowchart LR
   TAG --> HUMAN[Owner / 知情者核验]
   HUMAN --> NOTE[考古笔记 / ADR]
   NOTE -.喂给后续 AI.-> GEN[生成 / 重构]
-  style TAG fill:#f8efdf,stroke:#9d6127,color:#1e1c19
-  style HUMAN fill:#f1ece1,stroke:#2f6154,color:#1e1c19
+  style TAG fill:#fcefd3,stroke:#9d6127,color:#1e1c19
+  style HUMAN fill:#f1ebde,stroke:#2f6154,color:#1e1c19
 ```
 
 **图 7-1｜考古三步** — AI 能写解释草稿，不能把推测写成确定；人核验后才进组织知识。

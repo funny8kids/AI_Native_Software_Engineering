@@ -26,9 +26,9 @@ flowchart TB
   P6 --> P7[治理 23-27]
   P7 --> CASES[四案例 + 灰度锚点]
   CASES --> P9[交叉启示 33]
-  style POS fill:#f1ecf2,stroke:#6a4a78,color:#1e1c19
-  style ROAD fill:#e9f1e6,stroke:#3e7247,color:#1e1c19
-  style CASES fill:#f1ece1,stroke:#2f6154,color:#1e1c19
+  style POS fill:#f5e9f9,stroke:#6a4a78,color:#1e1c19
+  style ROAD fill:#e2f3df,stroke:#3e7247,color:#1e1c19
+  style CASES fill:#f1ebde,stroke:#2f6154,color:#1e1c19
 ```
 
 **图 TOC-1｜全书骨架** — 定位与路线图在前，理论中枢线性推进，四案例等权，附录可抄。

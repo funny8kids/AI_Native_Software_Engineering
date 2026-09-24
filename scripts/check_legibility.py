@@ -179,6 +179,29 @@ COVER_CTA_JS = r"""
 """
 
 
+def cover_cta(b: CDP, settle: float = 3.0, poll: float = 0.25):
+    """取「全书架构」入口的中心，返回（中心，是否落定，读到的不同值清单）。
+
+    封面不是挂出来就定住的：`.cover-main` 随封面图与字体到位才排定，实测同一条路由相邻
+    两次读到的中心是 y=499 与 y=751（差 252px）。拿中途的坐标去真点，点下去落在别处，
+    `section.cover.show` 不掉——第八道闸在 390 档就是这样红的（同一次跑里 1280 档却是绿的，
+    因为那一档的封面早就排定完了）。所以这里等落定，而不是重试瞎点。
+    落定不了也照实返回：调用方要把它报成"量具不稳"，而不是冒充"读者点不动入口"这个产品缺陷。
+    """
+    deadline = time.time() + settle
+    seen: list = []
+    prev = None
+    while time.time() < deadline:
+        cur = json.loads(b.js(COVER_CTA_JS) or "{}")
+        if cur not in seen:
+            seen.append(cur)
+        if cur and cur == prev:
+            return cur, True, seen
+        prev = cur
+        time.sleep(poll)
+    return prev, False, seen
+
+
 def dismiss_cover(b: CDP, path: str) -> str:
     """首页 `#/` 的正文压在封面之下：真点封面上那条「全书架构」入口把它揭幕。
 
@@ -195,13 +218,16 @@ def dismiss_cover(b: CDP, path: str) -> str:
     # 先等封面自己挂出来：`section.cover` 是 _coverpage.md 到手之后才建的，
     # 一到就查会查不到入口（第一次跑就是这样报的红）。
     b.wait_for("document.querySelectorAll('section.cover a').length > 0", 25)
-    rect = json.loads(b.js(COVER_CTA_JS) or "{}")
+    rect, settled, seen = cover_cta(b)
     if not rect:
         return "封面上找不到「全书架构」入口——正文无从揭幕，本页读数作废"
+    if not settled:
+        return (f"封面入口的中心在 3s 内没落定（读到过 {seen}）——量具不稳，"
+                f"点哪一下都不算数，本页读数作废")
     b.click(rect["x"], rect["y"])
     if not b.wait_for("!document.querySelector('section.cover.show')", 15):
-        return (f"真点 ({rect['x']},{rect['y']}) 之后封面仍在——读者点得动入口却进不到正文，"
-                f"本页读数作废")
+        return (f"真点 ({rect['x']},{rect['y']}) 之后封面仍在（该中心已连续两次读数相同）——"
+                f"读者点得动入口却进不到正文，本页读数作废")
     return ""
 
 

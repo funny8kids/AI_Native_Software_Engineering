@@ -146,9 +146,9 @@ flowchart LR
   FIX --> MIG
   REG -->|一致| NEXT[登记迁移完成<br/>回滚期内允许退回]
   NEXT --> DOM
-  style REG fill:#f1ece1,stroke:#2f6154,color:#1e1c19
-  style FIX fill:#f8efdf,stroke:#9d6127,color:#1e1c19
-  style NEXT fill:#e9f1e6,stroke:#3e7247,color:#1e1c19
+  style REG fill:#f1ebde,stroke:#2f6154,color:#1e1c19
+  style FIX fill:#fcefd3,stroke:#9d6127,color:#1e1c19
+  style NEXT fill:#e2f3df,stroke:#3e7247,color:#1e1c19
 ```
 
 **图 14-2｜逐域迁移回路** — 一域一迁、回归把关、包级 bug 有人兜底；退得回去，才走得下去。

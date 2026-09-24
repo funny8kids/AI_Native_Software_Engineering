@@ -52,13 +52,13 @@
   --c-plate-ink:    #1e1c19;   /* 图内文字 */
   --c-plate-line:   #6e675c;   /* 图内连线 */
   --c-plate-accent: #2f6154;   /* 图内强调（默认节点描边） */
-  --c-plate-node:   #f1ece1;   /* 默认节点底 */
-  --c-plate-red:      #f7e8e3;  --c-plate-red-line:    #a03b31;
-  --c-plate-amber:    #f8efdf;  --c-plate-amber-line:  #9d6127;
-  --c-plate-green:    #e9f1e6;  --c-plate-green-line:  #3e7247;
-  --c-plate-orange:   #faece4;  --c-plate-orange-line: #8a4b1c;
-  --c-plate-purple:   #f1ecf2;  --c-plate-purple-line: #6a4a78;
-  --c-plate-gray:     #eee8dc;  --c-plate-gray-line:   #c9bfa9;
+  --c-plate-node:   #f1ebde;   /* 默认节点底 */
+  --c-plate-red:      #ffe3df;  --c-plate-red-line:    #a03b31;
+  --c-plate-amber:    #fcefd3;  --c-plate-amber-line:  #9d6127;
+  --c-plate-green:    #e2f3df;  --c-plate-green-line:  #3e7247;
+  --c-plate-orange:   #ffeada;  --c-plate-orange-line: #8a4b1c;
+  --c-plate-purple:   #f5e9f9;  --c-plate-purple-line: #6a4a78;
+  --c-plate-gray:     #e5ddd0;  --c-plate-gray-line:   #c9bfa9;
   --c-plate-black:    #1e1c19;  --c-plate-black-line:  #141310;
   --c-plate-onblack:  #fefcf8;
 
@@ -144,6 +144,38 @@ body {
 
 a { color: var(--c-accent); text-decoration: none; }
 a:hover { color: var(--c-accent-hover); }
+
+/* ============================== 键盘焦点 ==============================
+   全站只有这一条焦点环：2px 实线铜绿、偏移 2px。不用浏览器默认环的理由是它跟着操作系统的
+   强调色走——在奶白纸底上是一团蓝，与全书唯一的强调色无关；各浏览器的粗细也不同。
+   选 :focus-visible 而不是 :focus：鼠标点击不残留环，键盘 Tab 必留环（WCAG 2.4.7/2.4.11，
+   环对相邻两侧的背景都要 ≥3:1，第八条守卫 check_palette.py 用真按键逐控件量）。
+
+   选择器是**裸 :focus-visible**，不是"逐标签点名"。上一版写的是
+   `a, button, input, select, textarea, summary, [tabindex], [contenteditable]`，
+   2026-09-25 真按 Tab 走 README 时发现它漏了一整类：图框 `.mermaid-block` 和宽表
+   `.table-scroll` 这类**溢出可滚的容器**——Chrome 现在会把它们收进 Tab 顺序（实测
+   `hasAttribute('tabindex')===false`、`tabIndex===-1`，却被 Tab 走到，计算样式停在
+   `outline: auto / 1px`，UA 环画在偏移 0 处、在深档底上取不到一个环像素）。漏掉这一类的
+   代价不是难看：读者用键盘滚到一张图上，那里就没有作者那一条环。全站当前 `[tabindex]`
+   元素数是 0，所以点名清单永远追不上浏览器给出的停靠点；裸选择器才跟得住。 */
+:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+/* 搜索框单独再写一遍不是冗余：`.search input{outline:none}` 有**两个宿主**——本文件下面
+   那一处，和 docs/vendor/search.min.js 在运行时注入的 <style>（docsify 自带的那份，
+   连同 `box-shadow: 0 0 5px var(--theme-color,#42b983)`）。带伪类的这条特异性压得过两处，
+   删掉上面那处也仍然需要它。实测（真按 Tab、稳定 0.6s 后取图像素）：修好前这个框唯一的指示是
+   1px 边框换色，环所在像素 #a2bfb1 对邻边 #faf8f3 = 1.86:1，过不了 3:1 的非文本底线；
+   修好后同一位置是 #2b7159，对 #faf8f3 = 5.48:1。
+   选择器写成 div.search 而不是 .search：注入条排在同名的本文件声明之后，同特异度是它赢
+   （同一场实测里看到的还有 padding 与发丝线，见下面 Search 一节的注释）。 */
+div.search input:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
 
 /* ============================== Navbar ============================== */
 .app-nav {
@@ -291,14 +323,24 @@ a:hover { color: var(--c-accent-hover); }
   letter-spacing: -.02em;
 }
 
-/* ============================== Search ============================== */
-.search {
+/* ============================== Search ==============================
+   这一节的选择器一律带元素名（div.search / div.search input）：docsify 的搜索插件在运行时
+   往 <head> 追加一条自己的 <style>（docs/vendor/search.min.js 里的 Docsify.dom.style），
+   它排在主题表之后，同特异度就是它赢。实测（1280/浅，读计算样式）：本文件原样写
+   `.search{padding:12px 16px 16px; border-bottom:1px solid var(--c-border)}` 与
+   `.search input{padding:9px 14px; font-size:14px}`，页面算出来却是插件的 6px、
+   1px solid #eee、.6em 7px、16px——四条声明里三条从没生效过，而文件里看不出这件事。
+   真正咬人的是那条 #eee：它是插件写死的字面量、不跟主题翻，深档下就是搜索框焦点环**下侧的
+   邻边**，环色 #9cc7b9 对它只有 1.60:1（第八条的焦点判据第一次真按 Tab 就跑出这条红）。
+   全站扫下来，`--theme-color` 与 `#eee` 这两个运行时事实只有搜索框一处消费者，所以在这里
+   一次性压过它，不需要 !important。 */
+div.search {
   padding: 12px 16px 16px;
   border-bottom: 1px solid var(--c-border);
   margin-bottom: 8px;
 }
 
-.search input {
+div.search input {
   width: 100%;
   padding: 9px 14px;
   background: var(--c-bg);
@@ -311,21 +353,23 @@ a:hover { color: var(--c-accent-hover); }
   transition: all .2s;
 }
 
-.search input::placeholder { color: var(--c-text-dim); }
+div.search input::placeholder { color: var(--c-text-dim); }
 
-.search input:focus {
+div.search input:focus {
   border-color: var(--c-accent);
   box-shadow: 0 0 0 3px var(--c-accent-soft);
 }
 
-.search .results-panel { margin-top: 8px; }
+div.search .results-panel { margin-top: 8px; }
 
-.search .matching-post {
+div.search .matching-post {
   padding: 8px 12px;
+  border-bottom: 1px solid var(--c-border);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background .15s;
 }
+div.search .matching-post:last-child { border-bottom: 0; }
 .search .matching-post:hover { background: var(--c-bg-hover); }
 .search .matching-post h2 { margin: 0 0 4px; font-size: 14px; color: var(--c-text); }
 .search .matching-post p { margin: 0; font-size: 12px; color: var(--c-text-3); }
@@ -966,11 +1010,21 @@ section.cover hr {
 
   .sidebar {
     transform: translateX(-100%);
+    /* 关着的抽屉必须退出 Tab 顺序：只 translateX(-100%) 时它仍在布局与焦点链里，
+       实测 390 档从 ☰ 起连按 Tab 会走进 20+ 个 x<0 的侧栏链接（「主页」「指南」「第 1 章…」），
+       读者看不见环也不知道自己在哪——焦点可见性（WCAG 2.4.7）在窄屏整条断掉。
+       visibility 与 transform 一起过渡、且只在收起方向上延迟 0.3s：滑出动画跑完才真正退出。 */
+    visibility: hidden;
+    transition: transform .3s cubic-bezier(.4,0,.2,1), visibility 0s linear .3s;
     z-index: 150;
     box-shadow: var(--shadow-lg);
   }
 
-  body.close .sidebar { transform: translateX(0); }
+  body.close .sidebar {
+    transform: translateX(0);
+    visibility: visible;
+    transition: transform .3s cubic-bezier(.4,0,.2,1), visibility 0s linear 0s;
+  }
 
   .content { left: 0; }
 

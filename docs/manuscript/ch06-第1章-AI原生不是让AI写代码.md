@@ -46,8 +46,8 @@ flowchart TB
   B --> C2["装上刹车<br/>围绕失灵重设计"]
   C2 --> D2["契约先行 · 人在回路 · 留缝留痕"]
   D2 --> E["失灵被接住<br/>速度才敢继续涨"]
-  style D1 fill:#f7e8e3,stroke:#a03b31,color:#1e1c19
-  style E fill:#e9f1e6,stroke:#3e7247,color:#1e1c19
+  style D1 fill:#ffe3df,stroke:#a03b31,color:#1e1c19
+  style E fill:#e2f3df,stroke:#3e7247,color:#1e1c19
 ```
 
 **图 1-1｜油门与刹车** — 只装油门，速度与事故一起涨；装上刹车，速度才敢继续涨。
@@ -65,8 +65,8 @@ flowchart TB
   L1 -.判断标准.-> Q{"流程里有没有<br/>为 AI 会出错<br/>专门设计的刹车？"}
   Q -->|没有| L1
   Q -->|有| L3
-  style L3 fill:#f1ece1,stroke:#2f6154,color:#1e1c19
-  style Q fill:#f8efdf,stroke:#9d6127,color:#1e1c19
+  style L3 fill:#f1ebde,stroke:#2f6154,color:#1e1c19
+  style Q fill:#fcefd3,stroke:#9d6127,color:#1e1c19
 ```
 
 **图 1-2｜三层能力** — 只要流程里没有为 AI 出错设计的刹车，就还在第一层。
@@ -118,8 +118,8 @@ flowchart TB
   G -->|可碰| A1["自动放行<br/>常规评审与测试"]
   G -->|需审批| A2["具名签字<br/>选择记录留痕"]
   G -->|不可碰| A3["直接拒绝<br/>转人工通道"]
-  style A3 fill:#f7e8e3,stroke:#a03b31,color:#1e1c19
-  style A2 fill:#f8efdf,stroke:#9d6127,color:#1e1c19
+  style A3 fill:#ffe3df,stroke:#a03b31,color:#1e1c19
+  style A2 fill:#fcefd3,stroke:#9d6127,color:#1e1c19
 ```
 
 **图 1-3｜边界清单进 CI** — 清单只有变成门禁才拦得住提交；纸面边界必然被进度绕过。

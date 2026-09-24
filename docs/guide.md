@@ -52,8 +52,8 @@ flowchart LR
   E --> F[治理]
   F --> G[四案例]
   G --> H[交叉启示]
-  style A fill:#f1ece1,stroke:#2f6154,color:#1e1c19
-  style H fill:#e9f1e6,stroke:#3e7247,color:#1e1c19
+  style A fill:#f1ebde,stroke:#2f6154,color:#1e1c19
+  style H fill:#e2f3df,stroke:#3e7247,color:#1e1c19
 ```
 
 **图 G-1｜阅读主路径** — 理论中枢与四案例等权并行；案例是示范，不是纪实。

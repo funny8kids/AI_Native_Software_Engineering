@@ -14,8 +14,8 @@ flowchart LR
   EVAL --> GUARD[权限与护栏]
   GUARD --> OBS[成本与可观测]
   OBS -.回灌约束.-> CTX
-  style EVAL fill:#f1ece1,stroke:#2f6154,color:#1e1c19
-  style GUARD fill:#f8efdf,stroke:#9d6127,color:#1e1c19
+  style EVAL fill:#f1ebde,stroke:#2f6154,color:#1e1c19
+  style GUARD fill:#fcefd3,stroke:#9d6127,color:#1e1c19
 ```
 
 **图 J-1｜AI 系统最小面** — 没有 eval 与权限，生成越多越像埋雷。
@@ -81,7 +81,7 @@ flowchart LR
   TAG --> GATE[加门禁]
   PROMPT --> PROD
   GATE --> PROD
-  style RUB fill:#f1ece1,stroke:#2f6154,color:#1e1c19
+  style RUB fill:#f1ebde,stroke:#2f6154,color:#1e1c19
 ```
 
 **图 J-2｜评估飞轮** — 评的是产物类型与缺陷，不是羞辱个人。
