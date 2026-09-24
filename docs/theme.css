@@ -940,15 +940,90 @@ section.cover hr {
   height: auto;
 }
 
-/* 窄屏：图被撑宽后必须左对齐，不能居中。
+/* 宽图宿主必须左对齐，且这条与视口无关。
    .mermaid 是 justify-content:center 的 flex，子元素比滚动容器宽时，居中会把左半张图
    推到滚动容器左侧之外，而左溢出滚不回来（scrollLeft 不能为负）——实测图左缘 x=-105。
-   撑宽本身由 index.html 的 ainseGuardDiagramWidth() 按每张图的 viewBox 宽逐图施加，
+   1280 档同样会溢出：可读性地板把宽图抬到 1000+px，正文栏只有 638px。
+   撑宽本身由 index.html 的 ainseGuardDiagramWidth() 按每张图的 viewBox 宽与文字自然字号逐图施加，
    不用 CSS 定值：定值会把 302px 的甘特也拉到 600px（缩放 2.0，字号失控）。 */
+.mermaid-block .mermaid.is-wide {
+  justify-content: flex-start;
+}
+
 @media (max-width: 768px) {
   .mermaid-block .mermaid {
     justify-content: flex-start;
   }
+}
+
+/* ============================== 横向滚动暗示 ==============================
+   读者在 390 档面对的是一张溢出 1167px 的图，而界面上没有任何一处说"还能往右滚"。
+   实测全站需横向滚动的容器 352 处、暗示覆盖率 0。这里补两层渐隐 + 方向箭头：
+   ① 挂在**不滚动**的 .scroll-frame 上——挂在滚动容器自己的 ::before/::after 上，
+      绝对定位的伪元素会跟着内容一起滚走，暗示在滚的第一帧就消失了；
+   ② pointer-events: none——它压着的就是图节点与表格单元格，不关掉命中就是替读者把
+      内容挡掉（第七道守卫在右缘逐点做 elementFromPoint 命中测试）。
+   .scrollable 由 JS 按 scrollWidth-clientWidth 挂号，不可滚的容器一片都不露。 */
+.scroll-frame {
+  position: relative;
+  --c-veil: var(--c-bg);          /* 表格层压在页面底色上 */
+}
+
+.scroll-frame:has(> .mermaid-block) {
+  --c-veil: var(--c-bg-soft);     /* 图有自己的浅色卡底，渐隐要用卡底才不会露白边 */
+}
+
+.scroll-veil {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  width: 46px;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  transition: opacity .18s ease;
+  pointer-events: none;
+  z-index: 3;
+  background-color: var(--c-veil);
+  -webkit-mask-image: linear-gradient(to right, #000 55%, transparent);
+  mask-image: linear-gradient(to right, #000 55%, transparent);
+}
+
+.scroll-veil.left {
+  left: 0;
+  justify-content: flex-start;
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+}
+
+.scroll-veil.right {
+  right: 0;
+  justify-content: flex-end;
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  -webkit-mask-image: linear-gradient(to left, #000 55%, transparent);
+  mask-image: linear-gradient(to left, #000 55%, transparent);
+}
+
+.scroll-frame.has-left .scroll-veil.left,
+.scroll-frame.has-right .scroll-veil.right {
+  opacity: 1;
+}
+
+/* 方向箭头：内联 SVG 蒙版，不引任何外部图标库 */
+.scroll-veil::after {
+  content: "";
+  width: 16px;
+  height: 16px;
+  margin: 0 7px;
+  background-color: var(--c-accent);
+  -webkit-mask: var(--chev) no-repeat center / contain;
+  mask: var(--chev) no-repeat center / contain;
+  --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 4l8 8-8 8' fill='none' stroke='%23000' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.scroll-veil.left::after { transform: rotate(180deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-veil { transition: none; }
 }
 
 .mermaid-block pre.mermaid,

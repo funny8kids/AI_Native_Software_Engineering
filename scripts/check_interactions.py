@@ -8,6 +8,8 @@ DOM，于是非封面路由上它依旧铺满整个视口——正文看得见�
 看不见遮挡类缺陷。所以本守卫只认两类证据：
   1) elementFromPoint 命中测试——坐标上真正接住事件的元素是谁；
   2) CDP Input 域的真实鼠标点击——点击后路由/主题/滚动是否确实变化。
+正文里覆在图与宽表之上的滚动暗示层（.scroll-veil，2026-09-24 新增）两类证据都用：
+命中测试逐点判它穿不穿得透，再对可见的暗示层真点一次、用捕获阶段的监听读回事件真正的接收者。
 
 用法：
     python3 scripts/check_interactions.py                 # 全量：62 条路由 × 1280/390 两档 + 点击链
@@ -132,10 +134,44 @@ PROBE_JS = r"""
     controls.push({ group: name, summary: true, present: nodes.length,
                     tested: tested, offscreen: off, hidden: hidden });
   });
+  // ---- 滚动暗示层（.scroll-frame / .scroll-veil）：它盖在正文与表格之上，必须穿透 ----
+  // 判据不能看 opacity：提示层有 .18s 淡入，正文刚渲染完时淡入还没走完，会把
+  // "有暗示层、正在淡入"报成"暗示层不存在"。所以节点存在性按 DOM 算，
+  // 可点性（要不要真点一次）才按淡入完成后的计算值算，且只用作候选。
+  var frames = [].slice.call(document.querySelectorAll('.scroll-frame'));
+  var veilEls = 0, needScroll = 0, veils = [];
+  frames.forEach(function (fr) {
+    var sc = fr.querySelector('.mermaid-block, .table-scroll');
+    if (!sc) return;
+    var over = sc.scrollWidth - sc.clientWidth;
+    var fi = -1;
+    if (over > 2) { needScroll++; fi = needScroll - 1; }   // 跨页定位用序号，不用坐标
+    [].slice.call(fr.querySelectorAll('.scroll-veil')).forEach(function (v) {
+      veilEls++;
+      if (over <= 2) return;                       // 不需要滚 → 不该有可见暗示，也不用来点
+      var cs = getComputedStyle(v), r = v.getBoundingClientRect();
+      var x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2);
+      var hit = document.elementFromPoint(x, y);
+      var side = /(^|\s)left(\s|$)/.test(v.className) ? 'left' : 'right';
+      // "这一侧此刻该不该显示"只问状态类，不问 computed opacity：提示层有 .18s 淡入，
+      // 正文刚渲染完时 opacity 还在过渡（实测 0.00x），拿它当候选条件会让真点这一步
+      // 永远 0 次执行（第一版就是这样：516 点命中、0 次真点）。
+      // 第二版改用"坐标在视口内"当候选条件，同样 0 次真点——量测时的坐标不能沿用：
+      // 同一次求值里控件那一段 settle() 滚过侧边栏，正文里暗示层的 y 已经换人了
+      // （实测 ch37 那条的 y=7345，远超 900 视口）。所以这里只交状态类 + 容器序号，
+      // 真点前重新定位再量坐标。
+      veils.push({ side: side, at: [x, y], pe: cs.pointerEvents, overflow: Math.round(over),
+                   fi: fi, fade: parseFloat(cs.opacity),
+                   on: fr.classList.contains(side === 'left' ? 'has-left' : 'has-right'),
+                   hit: chain(hit), eats: !!(hit && (hit === v || v.contains(hit))),
+                   inView: x > 1 && y > 1 && x < W - 1 && y < H - 1 });
+    });
+  });
   return JSON.stringify({
     viewport: [W, H],
     hash: location.hash,
     title: (document.querySelector('.markdown-section h1') || {}).innerText || '',
+    veils: veils, needScroll: needScroll, veilEls: veilEls,
     hits: hits,
     controls: controls,
     overflow: [].slice.call(document.querySelectorAll('.sidebar li a')).filter(function (a) {
@@ -144,6 +180,19 @@ PROBE_JS = r"""
   });
 })(%s, %s)
 """
+
+# 真实点击的接收者只能从事件本身读：给 document 挂一个捕获阶段监听，把这次点击的
+# target 描述存到全局，点完再取。只挂一次（重复挂载会让同一次点击写三遍读数）。
+VEIL_SPY_ARM = r"""(function () {
+  if (window.__ainseVeilArmed) return 1;
+  window.__ainseVeilArmed = 1;
+  document.addEventListener('click', function (e) {
+    var t = e.target, d = (t.tagName || '').toLowerCase();
+    var cls = (typeof t.className === 'string' ? t.className.trim() : '');
+    window.__ainseVeilSpy = d + (cls ? '.' + cls.split(/\s+/)[0] : '');
+  }, true);
+  return 1;
+})()"""
 
 
 def serve(directory: Path):
@@ -213,8 +262,13 @@ class Suite:
         self.widths = widths
         self.chain = chain
         self.failures: list[str] = []
-        self.counters = {"routes": 0, "hitpoints": 0, "controls": 0, "clicks": 0}
+        self.counters = {"routes": 0, "hitpoints": 0, "controls": 0, "clicks": 0,
+                         "veil_nodes": 0, "veil_points": 0, "veil_clicks": 0, "veil_on": 0}
         self.console: list[str] = []
+        # 每档视口最多真点两处暗示层：目标是"证明这层不吃点击"，不是遍历 90 个容器
+        self.veil_targets: list[tuple[str, list, str, int]] = []
+
+    VEIL_CLICK_MAX = 2
 
     def fail(self, what: str) -> None:
         self.failures.append(what)
@@ -228,6 +282,7 @@ class Suite:
                 return
             for w, h in self.widths:
                 b.set_viewport(w, h, mobile=w < 700)
+                clicks0, points0 = self.counters["veil_clicks"], self.counters["veil_points"]
                 for route in self.routes:
                     self.probe_route(b, route, w, h)
                 print(f"  · 命中测试 {w}x{h}：{self.counters['routes']} 页 / "
@@ -236,6 +291,21 @@ class Suite:
                     self.click_chain(b, w, h)
                     print(f"  · 真实点击链 {w}x{h}：{self.counters['clicks']} 次，"
                           f"累计失败 {len(self.failures)}", flush=True)
+                cand = len(self.veil_targets)
+                on0 = self.counters["veil_on"]
+                self.veil_click_through(b, w, h)
+                got = self.counters["veil_clicks"] - clicks0
+                pts = self.counters["veil_points"] - points0
+                print(f"  · 暗示层穿透 {w}x{h}：节点 {self.counters['veil_nodes']} 个、"
+                      f"命中测试 {pts} 点（其中该侧有状态类 {self.counters['veil_on']} 点）、"
+                      f"真点 {got}/{cand} 处（接收者都不是暗示层）", flush=True)
+                # 有对象可量却一次真点都没跑＝这一判据只剩命中测试半条腿。
+                # 上一版正是这个状态（候选条件用了淡入中的 opacity，516 点命中、0 次点击），
+                # "全绿"里藏着一段从不执行的代码。
+                if pts and not got:
+                    self.fail(f"[{w}x{h}] 暗示层命中测试量到 {pts} 点、该侧有状态类 "
+                              f"{on0} 点，真实点击却 0 次——穿透判据只剩几何半条腿，"
+                              f"本档结论不成立（候选 {cand} 处）")
             self.check_console_errors(b)
 
     def goto(self, b: CDP, route: str, w: int, h: int) -> bool:
@@ -295,7 +365,105 @@ class Suite:
                 f"[{w}x{h}] {route}：侧边栏有 {len(rep['overflow'])} 条标题被裁切："
                 + "、".join(rep["overflow"][:4])
             )
+        # —— 滚动暗示层：命中测试逐点判"穿不穿得透"，并把可点候选交给真实点击
+        self.counters["veil_nodes"] += rep["veilEls"]
+        if rep["needScroll"] and not rep["veilEls"]:
+            self.fail(
+                f"[{w}x{h}] {route}：{rep['needScroll']} 个容器要横向滚动，页内却有 0 个"
+                f" .scroll-veil 节点——读者无从知道右边还有内容"
+            )
+        for v in rep["veils"]:
+            self.counters["veil_points"] += 1
+            if v["eats"]:
+                self.fail(
+                    f"[{w}x{h}] {route}：{v['side']} 侧暗示层在 {v['at']} 挡住了命中测试"
+                    f"（overflow={v['overflow']}px，接住点击的是 {v['hit']}）——它吃掉点击"
+                )
+            if v["pe"] != "none":
+                self.fail(
+                    f"[{w}x{h}] {route}：{v['side']} 侧暗示层 pointer-events={v['pe']}"
+                    f"——覆盖在表格与图上的层必须只看不拦"
+                )
+            if v["on"]:
+                self.counters["veil_on"] += 1
+                # 候选只按「该侧此刻该显示」选，不按坐标在不在视口内选：命中测试跑之前
+                # 控件那一段会 settle() 滚侧边栏，正文里暗示层的 y 早就不是点的时候的 y 了。
+                # 真点时重新定位＋滚到跟前（见 veil_click_through），坐标现量。
+                if len(self.veil_targets) < self.VEIL_CLICK_MAX:
+                    self.veil_targets.append((route, v["fi"], v["side"], v["overflow"]))
         return rep
+
+    VEIL_ANCHOR_JS = r"""(function (fi, side) {
+      var n = 0;
+      var frames = [].slice.call(document.querySelectorAll('.scroll-frame'));
+      for (var i = 0; i < frames.length; i++) {
+        var fr = frames[i];
+        var sc = fr.querySelector('.mermaid-block, .table-scroll');
+        if (!sc) continue;
+        if (sc.scrollWidth - sc.clientWidth <= 2) continue;
+        if (n++ !== fi) continue;
+        var v = [].slice.call(fr.querySelectorAll('.scroll-veil')).filter(function (x) {
+          return new RegExp('(^|\\s)' + side + '(\\s|$)').test(x.className);
+        })[0];
+        if (!v) return JSON.stringify({missing: 'veil'});
+        v.scrollIntoView({block: 'center', behavior: 'instant'});
+        var r = v.getBoundingClientRect(), W = innerWidth, H = innerHeight;
+        var x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2);
+        return JSON.stringify({
+          at: [x, y], inView: x > 1 && y > 1 && x < W - 1 && y < H - 1,
+          on: fr.classList.contains(side === 'left' ? 'has-left' : 'has-right'),
+          overflow: Math.round(sc.scrollWidth - sc.clientWidth), sl: Math.round(sc.scrollLeft)
+        });
+      }
+      return JSON.stringify({missing: 'frame'});
+    })"""
+
+    def veil_click_through(self, b: CDP, w: int, h: int) -> None:
+        """真实点击暗示层覆盖的坐标，用捕获阶段的事件监听取回**事件真正的接收者**。
+
+        命中测试（elementFromPoint）说"穿透"仍只是几何读数：CSS 改了 pointer-events、
+        或层叠上下文变了，只有派发出去的那一次点击会给出答案。所以这里既真点、又核对
+        接收者不是 .scroll-veil——两条证据同向才算通过。
+
+        坐标不能沿用命中测试那一次：Docsify 换页会重画正文，控件那一段还会滚动，
+        沿用旧坐标＝点在一块可能根本不存在暗示层的地方。所以按容器序号重新定位、
+        滚到跟前、重新量中心，再点。
+        """
+        if not self.veil_targets:
+            return
+        for route, fi, side, overflow in self.veil_targets:
+            if not self.goto(b, route, w, h):
+                continue
+            anchor = json.loads(b.js(f"{self.VEIL_ANCHOR_JS}({fi}, {json.dumps(side)})"))
+            if anchor.get("missing"):
+                self.fail(f"[{w}x{h}] {route}：真点前重定位第 {fi} 个横向滚动容器的 {side} 侧暗示层"
+                          f"失败（{anchor['missing']} 不在）——候选失效，本条判定未执行")
+                continue
+            if not anchor["on"] or anchor["overflow"] <= 2:
+                self.fail(f"[{w}x{h}] {route}：第 {fi} 个容器需横向滚动 {anchor['overflow']}px"
+                          f"（scrollLeft={anchor['sl']}），{side} 侧暗示层状态类却没生效"
+                          f"——读者看不到这一侧的滚动暗示")
+                continue
+            if not anchor["inView"]:
+                self.fail(f"[{w}x{h}] {route}：{side} 侧暗示层滚到跟前仍不在视口内"
+                          f"（中心 {anchor['at']}）——无法真点，本条判定未执行")
+                continue
+            x, y = anchor["at"]
+            b.js(VEIL_SPY_ARM)
+            b.js("window.__ainseVeilSpy = null; 1")
+            b.click(x, y)
+            self.counters["clicks"] += 1
+            time.sleep(0.25)
+            spy = b.js("window.__ainseVeilSpy")
+            if spy is None:
+                self.fail(f"[{w}x{h}] {route}：真点 {side} 侧暗示层 ({x},{y}) 后监听器没收到任何"
+                          f"点击事件——点击没进入文档树，判定为无读数")
+            elif "scroll-veil" in spy:
+                self.fail(f"[{w}x{h}] {route}：真点 {side} 侧暗示层 ({x},{y})（该容器需横向滚动 "
+                          f"{anchor['overflow']}px）后事件接收者是 {spy}——暗示层吃掉了读者的点击")
+            else:
+                self.counters["veil_clicks"] += 1
+        self.veil_targets = []
 
     @staticmethod
     def must_be_hittable(group: str, w: int, is_cover: bool) -> bool:
@@ -790,6 +958,13 @@ MUTATIONS = [
         ),
         ("这一点被别的东西吃掉", "没到站", "0 个通过命中测试"),
     ),
+    (
+        "M5 让滚动暗示层吃掉点击（pointer-events:auto）",
+        lambda files: files["theme.css"].__setitem__(
+            "__tail__", "\n.scroll-veil{pointer-events:auto;}\n"
+        ),
+        ("侧暗示层在", "侧暗示层 pointer-events", "暗示层吃掉了读者的点击"),
+    ),
 ]
 
 
@@ -937,7 +1112,8 @@ def main() -> int:
     # 报"0 处点不动"之前先交代本轮跑了哪些阶段：
     # 带 --no-chain 冒烟时的"全绿"不许长得像全量全绿。
     skipped = [n for n, on in (("真实点击链", not args.no_chain),
-                              ("逐路由点击遍历", not args.no_walk)) if not on]
+                              ("逐路由点击遍历", not args.no_walk),
+                              ("全部路由（本轮只跑 --limit 指定的前几条）", not args.limit)) if not on]
     scope = "（全量）" if not skipped else "（部分：" + "、".join(skipped) + " 已跳过，不构成全量结论）"
     print(f"\n交互闸通过{scope}：0 处遮挡、0 处点不动、0 次点击后状态不变、0 条控制台错误。")
     return 0

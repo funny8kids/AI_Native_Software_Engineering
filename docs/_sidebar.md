@@ -5,7 +5,7 @@
   - [总览](/manuscript/README.md)
   - [这本书是什么](/manuscript/ch01-这本书是什么.md)
   - [90 天总路线图](/manuscript/ch02-90天总路线图.md)
-  - 地基（四案例并列）
+  - **地基（四案例并列）**
     - [四案例时间线](/manuscript/ch03-案例时间线.md)
     - [四案例角色设定卡](/manuscript/ch04-角色设定卡.md)
     - [四案例数字清单](/manuscript/ch05-数字清单.md)
@@ -51,7 +51,7 @@
     - [案例四 · 守夜人科技](/manuscript/ch37-案例四-守夜人科技.md)
   - [卷首 · 第九部分 · 交叉收束](</manuscript/part-9-交叉收束.md>)
     - [第 33 章 · 四案例交叉启示](/manuscript/ch38-第33章-四案例交叉启示.md)
-  - 配套附录
+  - **配套附录**
     - [附录 A · 提示词库骨架](/manuscript/ch39-附录A-提示词库骨架.md)
     - [附录 I · 契约治理规范模板](/manuscript/ch40-附录I-契约治理规范模板.md)
     - [附录 J · AI 系统工程最小面](/manuscript/ch41-附录J-AI系统工程.md)

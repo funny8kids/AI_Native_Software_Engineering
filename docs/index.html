@@ -99,15 +99,104 @@
     // 失败仍用 console.error 点名「哪条路径、哪一页、哪张图」——
     // 静默或降级成 warn 等于给交互守卫拆闸（守卫按 0 控制台错误判绿）。
     var ainseMermaidChain = Promise.resolve();
-    // 窄屏不许把图等比缩到不可读：mermaid 给 svg 写的是内联 max-width = 自己的 viewBox 宽，
-    // 于是 viewBox 1045 的横向流程图在 390 视口里被压成 340px（缩放 0.33，节点文字 4～5px）。
-    // 这里按「每张图自己的 viewBox 宽」补一条 min-width，多出来的宽度交给
-    // .mermaid-block 已有的 overflow-x:auto 横向滚动。宽屏不介入——桌面保持整图可见、不溢出。
+    // 可读性地板：图不许被等比缩到看不清。
+    // 上一版只在 768 以下按 viewBox 补 min-width，桌面「保持整图可见、不溢出」不介入——
+    // 但 1280 档实测 41 张宽图仍被 svg{max-width:100%} 压进 638px 正文栏，
+    // 最差 ch37 案例四 viewBox 1491 → 638px（缩放 0.428），节点「CTO 阿坤」有效字号 6.85px。
+    // 现在两档都按「这张图自己的最小自然字号」算出抬到 AINSE_MIN_FONT 所需的比例，
+    // 多出来的宽度交给 .mermaid-block 的 overflow-x:auto，并由 ainseScrollFrame() 挂上滚动暗示。
+    var AINSE_MIN_FONT = 11;   // px：图上任何一处文字在屏幕上真正显示出来的字号下限
+    var AINSE_NARROW = 768;    // 与 theme.css 的窄屏分界保持一致
+    var AINSE_MAX_UPSCALE = 1.2;  // 允许放大的上限：自然字号低于地板时（甘特刻度实测 10px）
+
+    function ainseMinFontPx(svg) {
+      var min = null;
+      // flowchart 开了 htmlLabels，节点文字住在 foreignObject 里的 div 上；
+      // 甘特/时序图的标签是 <text>。只查其一会把"有字的图"读成"没字的图"
+      // （实测 ch05 两张图因此被当成无对象可判）。
+      var nodes = svg.querySelectorAll('text, foreignObject *');
+      for (var i = 0; i < nodes.length; i++) {
+        if (!(nodes[i].textContent || '').trim()) continue;
+        var fs = parseFloat(window.getComputedStyle(nodes[i]).fontSize) || 0;
+        if (fs && (min === null || fs < min)) min = fs;
+      }
+      return min;
+    }
+
     function ainseGuardDiagramWidth(host) {
-      if (!window.matchMedia('(max-width: 768px)').matches) return;
       var svg = host.querySelector('svg');
       if (!svg || !svg.viewBox || !svg.viewBox.baseVal.width) return;
-      svg.style.minWidth = Math.round(svg.viewBox.baseVal.width) + 'px';
+      var vbW = svg.viewBox.baseVal.width;
+      var nat = ainseMinFontPx(svg);
+      if (!nat) return;                                  // 纯图形（无文字）不适用字号判据
+      // 抬到地板所需的缩放：nat≥11 时 <1（不许缩到地板以下），nat<11 时 >1（放大补回来，
+      // 封顶 AINSE_MAX_UPSCALE）。上一版写成 Math.min(1, …)，等于宣布"自然字号本来就
+      // 低于地板的图无救"——甘特刻度 10px 全站 8 张，两档视口都是 scale 1 仍 10px。
+      var need = Math.min(AINSE_MAX_UPSCALE, AINSE_MIN_FONT / nat);
+      var narrow = window.matchMedia('(max-width: ' + AINSE_NARROW + 'px)').matches;
+      var target = narrow ? Math.max(need, 1) : need;
+      svg.style.minWidth = '';                           // 先还原：否则宿主宽被上一次决定污染
+      // 可用宽度取宿主自己的 clientWidth，不取父层：.mermaid-block 有 16px 左右内边距，
+      // 拿它的 clientWidth（含 padding，实测 670）会把"还放得下"算多 32px——
+      // 实测 README 首图 avail/vbW=0.815 ≥ 所需 0.786 于是原地不动，svg 却按
+      // max-width:100% 缩进 638px 的内容宽，有效字号停在 10.87px。
+      var avail = host.clientWidth || (host.parentElement || host).clientWidth;
+      if (avail / vbW < target) {
+        // 向上取整：round 会把 1001×(11/14)=786.2 打回 786，有效字号 10.99 —— 差 0.01px
+        // 也是不合格，而这是守卫会逐张报红的差。
+        svg.style.minWidth = Math.ceil(vbW * target) + 'px';
+        host.classList.add('is-wide');
+      } else {
+        host.classList.remove('is-wide');
+      }
+      ainseScrollFrame(host.closest('.mermaid-block'));
+    }
+
+    // 滚动暗示层：给「内容比容器宽、可以横向滚」的图与表外套一层 .scroll-frame，
+    // 左右各一片 .scroll-veil 渐隐加箭头。两处不是顺手写的：
+    // ① 渐隐挂在**不滚动**的外层——挂在滚动容器自己的 ::before/::after 上，
+    //    绝对定位的伪元素会随内容一起滚走，暗示跟着一起消失；
+    // ② 渐隐一律 pointer-events:none——它压着的就是图节点与表格单元格，
+    //    不关掉命中就是替读者把内容挡掉（第七道守卫逐点在右缘做命中测试）。
+    function ainseVeil(side) {
+      var s = document.createElement('span');
+      s.className = 'scroll-veil ' + side;
+      s.setAttribute('aria-hidden', 'true');             // 纯视觉暗示，读屏不念箭头
+      return s;
+    }
+
+    function ainseScrollFrame(sc) {
+      if (!sc || sc.nodeType !== 1) return null;
+      // 已经建过层也要重算状态：doneEach 里的 ainseFramesAll() 会先把图框起来（那一刻
+      // svg 还没被 ainseGuardDiagramWidth 撑宽，溢出量＝0），随后作图链才落地。
+      // 早退不重算的话，暗示层永远停在"不可滚"那一态——实测 frame 类名一直是光秃秃的
+      // .scroll-frame，读者看得到 1167px 的溢出却没有半个箭头。
+      if (sc.__ainseSync) { sc.__ainseSync(); return sc.parentElement; }
+      if (!sc.parentElement) return null;
+      var frame = document.createElement('div');
+      frame.className = 'scroll-frame';
+      sc.parentNode.insertBefore(frame, sc);
+      frame.appendChild(sc);
+      frame.appendChild(ainseVeil('left'));
+      frame.appendChild(ainseVeil('right'));
+      function sync() {
+        var max = sc.scrollWidth - sc.clientWidth;
+        var x = sc.scrollLeft;
+        frame.classList.toggle('scrollable', max > 2);
+        frame.classList.toggle('has-right', max > 2 && x < max - 1);
+        frame.classList.toggle('has-left', max > 2 && x > 1);
+      }
+      sc.addEventListener('scroll', sync, {passive: true});
+      window.addEventListener('resize', sync);
+      sc.__ainseSync = sync;
+      sync();
+      return frame;
+    }
+
+    function ainseFramesAll() {
+      var els = document.querySelectorAll(
+        '.markdown-section .mermaid-block, .markdown-section .table-scroll');
+      for (var i = 0; i < els.length; i++) ainseScrollFrame(els[i]);
     }
     // opts.reset：出队时才把节点还原成源码（先还原＝会在上一批还在画时踩到同一节点）
     function ainseRunMermaid(nodes, why, opts) {
@@ -341,6 +430,7 @@
               mermaidNodes = [];
             }
 
+            ainseFramesAll();   // 宽表在 afterEach 里已被套上 .table-scroll，这一层补上滚动暗示
             watchCover();
           });
         },

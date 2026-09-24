@@ -177,36 +177,46 @@ def audit(base: str, shot_dir: Path | None = None, report: bool = False) -> list
 
 # 每条变异 = (名字, 改哪个文件, 锚点, 替换成, 期望被打红的判据名)。
 # 锚点缺失即中止，避免"补丁没打上 → 全绿"的假自检；old 为空表示追加。
+# 锚点/替换也可以是**等长列表**：一条机制今天由两条规则共同守住时（宽图左对齐＝`.is-wide`
+# 通用规则 + 窄屏媒体查询），只删一条会让变异变成"改了但没坏"的假绿（本轮 C 就是这样：
+# 删掉媒体查询那条，is-wide 仍把图钉在左缘，报红 0 条）。逐条各自验唯一性。
 MUTATIONS = [
     ("A 顶栏允许换行（去掉 ul 的 nowrap）", "theme.css",
      "    flex-wrap: nowrap;\n", "    flex-wrap: wrap;\n", "跑出固定条"),
     ("B 顶栏项可被压扁（去掉 li 不被压缩 + 链接 nowrap）", "theme.css",
      "  .app-nav li { flex: 0 0 auto; }\n\n  .app-nav a {\n    white-space: nowrap;\n",
      "  .app-nav li { flex-shrink: 1; }\n\n  .app-nav a {\n", "折成 2 行"),
-    ("C mermaid 回到居中（撑宽后左半张推到负偏移）", "theme.css",
-     "  .mermaid-block .mermaid {\n    justify-content: flex-start;\n  }",
-     "  /* 变异 C：删掉左对齐 */", "居中溢出滚不回来"),
+    ("C 撤掉宽图左对齐（两条 flex-start 一起删，撑宽后左半张推到负偏移）", "theme.css",
+     [".mermaid-block .mermaid.is-wide {\n  justify-content: flex-start;\n}",
+      "  .mermaid-block .mermaid {\n    justify-content: flex-start;\n  }"],
+     ["/* 变异 C：删掉宽图（is-wide）左对齐 */", "  /* 变异 C：删掉窄屏左对齐 */"],
+     "居中溢出滚不回来"),
     ("D 正文强行加宽（造出正文层整页横滚）", "theme.css",
      "", "\n.markdown-section{min-width:1400px !important;}\n", "正文层 .content 横向溢出"),
     ("E 窄屏定宽守卫失配（matchMedia 永不命中，图被等比缩糊）", "index.html",
-     "if (!window.matchMedia('(max-width: 768px)').matches) return;",
-     "if (!window.matchMedia('(min-width: 4000px)').matches) return;", "等比缩成糊图"),
+     "      var narrow = window.matchMedia('(max-width: ' + AINSE_NARROW + 'px)').matches;\n"
+     "      var target = narrow ? Math.max(need, 1) : need;",
+     "      var narrow = window.matchMedia('(min-width: 4000px)').matches;\n"
+     "      var target = narrow ? Math.max(need, 1) : need;", "等比缩成糊图"),
 ]
 
 
 def apply_mutation(tmp: Path, mut) -> None:
     name, fname, old, new, _ = mut
+    pairs = list(zip(old, new)) if isinstance(old, list) else [(old, new)]
     text = (DOCS / fname).read_text()
-    if old and old not in text:
-        raise SystemExit(f"变异 {name} 的锚点在 {fname} 里找不到——自检本身失效，先修这条变异")
-    # 锚点必须唯一：替换只吃第一处，同一段代码在别处出现过时，变异会打到另一个函数上——
-    # 表现为「变异未被捕获」的假红（本轮 E 第一次就是这样：锚点命中 ainseGanttWidth 的
-    # matchMedia，窄屏定宽守卫原地不动，图当然不糊）。歧义要在打补丁之前中止。
-    hits = text.count(old)
-    if old and hits != 1:
-        raise SystemExit(f"变异 {name} 的锚点在 {fname} 里出现 {hits} 次（需要恰好 1 次）——"
-                         f"第一处不一定是你要改的那一处，请把锚点写成整行以消除歧义")
-    (tmp / fname).write_text(text.replace(old, new, 1) if old else text + new)
+    for o, n in pairs:
+        if o and o not in text:
+            raise SystemExit(f"变异 {name} 的锚点在 {fname} 里找不到——自检本身失效，先修这条变异")
+        # 锚点必须唯一：替换只吃第一处，同一段代码在别处出现过时，变异会打到另一个函数上——
+        # 表现为「变异未被捕获」的假红（本轮 E 第一次就是这样：锚点命中 ainseGanttWidth 的
+        # matchMedia，窄屏定宽守卫原地不动，图当然不糊）。歧义要在打补丁之前中止。
+        hits = text.count(o)
+        if o and hits != 1:
+            raise SystemExit(f"变异 {name} 的锚点在 {fname} 里出现 {hits} 次（需要恰好 1 次）——"
+                             f"第一处不一定是你要改的那一处，请把锚点写成整行以消除歧义")
+        text = text.replace(o, n, 1) if o else text + n
+    (tmp / fname).write_text(text)
 
 
 def run_mutations() -> int:
