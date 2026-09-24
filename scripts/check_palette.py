@@ -23,7 +23,7 @@
 
 用法：
     python3 scripts/check_palette.py                        # 全量：62 条路由 × 1280/1440/390 × 浅/深
-    python3 scripts/check_palette.py --mutate               # 变异自检：八条判据各自要能被打红
+    python3 scripts/check_palette.py --mutate               # 变异自检：九条判据各自要能被打红
     python3 scripts/check_palette.py --screenshot DIR       # 供人工逐项复核的截图
     python3 scripts/check_palette.py --report               # 打印对比度最低的若干对前景/底色
 
@@ -340,7 +340,8 @@ PROBE_JS = r"""
   }
 
   var out = {hash: location.hash, theme: document.documentElement.getAttribute('data-theme') || '',
-             tokens: {}, text: [], svg: [], walker: 0, sampled: 0, sampledMd: 0,
+             tokens: {}, text: [], svg: [], walker: 0, sampled: 0, sampledMd: 0, pseudo: 0,
+             navShown: false,
              figs: {blocks: 0, svgs: 0, raw: 0}, orphans: 0, uncovered: {}, via: {}};
   var sampledSet = (typeof WeakSet === 'function') ? new WeakSet() : null;
   var cs = getComputedStyle(document.documentElement);
@@ -389,6 +390,33 @@ PROBE_JS = r"""
                     cls: (typeof el.className === 'string' ? el.className.split(' ')[0] : ''),
                     txt: own.slice(0, 20), fg: rec.fg, bg: rec.bg, size: rec.size,
                     large: rec.large, ratio: rec.ratio});
+  });
+
+  // 伪元素里生成的字。这类文字不是 DOM 文本节点，上面那条枚举口径永远看不见它，
+  // TreeWalker 也数不到它——窄屏顶栏第一行的书名（.app-nav::before）就是新增的一处正文。
+  // 它在场却没被量到 = 伪元素口径失明；封面页整条顶栏 display:none，不参与这条自证。
+  var navEl = document.querySelector('.app-nav');
+  out.navShown = !!(navEl && getComputedStyle(navEl).display !== 'none'
+                       && navEl.getBoundingClientRect().width > 0);
+  [].forEach.call(document.querySelectorAll('.app-nav, .markdown-section'), function (el) {
+    ['::before', '::after'].forEach(function (pe) {
+      var pst = getComputedStyle(el, pe);
+      if (pst.display === 'none' || pst.visibility === 'hidden') return;
+      var raw = pst.content || '';
+      if (raw === 'none' || raw === 'normal' || raw === '""' || raw === "''") return;
+      var txt = raw.replace(/^[\"']|[\"']$/g, '').trim();
+      if (!txt) return;                        // 纯装饰（图标字体/渐变条）没有字，不参与文字判据
+      var r = el.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      var bd = backdrop(el, 1);
+      if (bd.opacity < 0.05) return;
+      var rec = classify(el, pst, bd.color, bd.opacity);
+      if (!rec) return;
+      out.pseudo++; out.sampled++;
+      push(out.text, {tag: 'pseudo' + pe, cls: (typeof el.className === 'string' ? el.className.split(' ')[0] : ''),
+                      txt: txt.slice(0, 20), fg: rec.fg, bg: rec.bg, size: rec.size,
+                      large: rec.large, ratio: rec.ratio});
+    });
   });
 
   // 图内文字
@@ -586,7 +614,8 @@ def audit(base: str, pages: list[str], themes: list[str],
     fails: list[str] = []
     worst: list[tuple[float, str]] = []
     stats = {"pages": 0, "sampled": 0, "walker": 0, "uncovered": 0, "figBlocks": 0,
-             "figSvgs": 0, "figRaw": 0, "clicks": 0, "svg": 0, "text": 0, "orphan": 0, "via": {}}
+             "figSvgs": 0, "figRaw": 0, "clicks": 0, "svg": 0, "text": 0, "orphan": 0,
+             "pseudo": 0, "pseudoMobilePages": 0, "via": {}}
     for w, h, mobile in (viewports or VIEWPORTS):
         with CDP(w, h) as b:
             b.set_viewport(w, h, mobile=mobile)
@@ -668,6 +697,12 @@ def audit(base: str, pages: list[str], themes: list[str],
                     stats["uncovered"] += unc_total
                     stats["svg"] += len(d["svg"])
                     stats["text"] += len(d["text"])
+                    stats["pseudo"] += d.get("pseudo", 0)
+                    if mobile and d.get("navShown"):
+                        stats["pseudoMobilePages"] += 1
+                        if not d.get("pseudo"):
+                            fails.append(f"[{label}] 390 档顶栏在场、书名（.app-nav::before）却没被量到——"
+                                         f"伪元素判据这一页是瞎的（不中止本页其余判据）")
                     for k, v in (d.get("via") or {}).items():
                         stats["via"][k] = stats["via"].get(k, 0) + v
                     if d["sampled"] == 0:
@@ -724,7 +759,10 @@ def audit(base: str, pages: list[str], themes: list[str],
 # ============================== 变异自检 ==============================
 
 MUT_PAGES = ["README", "manuscript/ch09-第4章-AI原生工程栈"]
-MUT_VIEWS = [(1280, 900, False)]
+# 390 档必须一起跑：窄屏顶栏第一行的书名只在 @media (max-width:768px) 里被 ::before
+# 生成出来。只在 1280 跑变异，等于「伪元素判据」这一类对象从来没有过一次 RED——
+# 绿读数证明不了它会报红。
+MUT_VIEWS = [(1280, 900, False), (390, 844, True)]
 
 CH09 = "manuscript/ch09-第4章-AI原生工程栈.md"
 ANCHOR_D1 = "  P4 -.反馈约束.-> P1\n  style P1 fill:#eae4d6,stroke:#2f6154,color:#1e1c19"
@@ -767,6 +805,11 @@ MUTATIONS = [
     ("P8 把字面量色塞回 @media print（豁免原址的正对照）", "theme.css",
      "  body { background: var(--c-print-paper); color: var(--c-print-ink); }",
      "  body { background: #fff; color: #000; }", "字面量色值"),
+    # 伪元素口径的正对照：把窄屏书名指到一个合法令牌上，但它恰好是发丝线色。
+    # 不打字面量色（那会被 P3 的 token 纪律先吃掉，看不出伪元素判据有没有在工作）。
+    ("P9 窄屏顶栏书名换成发丝线色（::before 生成的字）", "theme.css",
+     "    letter-spacing: .12em;\n    color: var(--c-text-2);",
+     "    letter-spacing: .12em;\n    color: var(--c-border);", "pseudo::before"),
 ]
 
 
@@ -858,7 +901,7 @@ def main() -> int:
     pages = ["ALL"] if args.pages == "ALL" else [p.strip() for p in args.pages.split(",")]
 
     if args.mutate:
-        print("[变异自检] 八条判据各自要能被按各自的机制打红")
+        print("[变异自检] 九条判据各自要能被按各自的机制打红")
         bad = run_mutations()
         print(f"[变异自检] {'全部命中' if bad == 0 else str(bad) + ' 条变异存活——判据有失明'}")
         return 0 if bad == 0 else 1
@@ -886,6 +929,7 @@ def main() -> int:
 
     print(f"[浏览器] 有效读数 {stats['pages']} 页次，正文/图形样本 {stats['text']}+{stats['svg']} 个，"
           f"独立口径 {stats['walker']} 个可见文本节点（未覆盖 {stats['uncovered']}），"
+          f"伪元素生成的字 {stats['pseudo']} 条（顶栏在场的 390 页次 {stats['pseudoMobilePages']}），"
           f"真点换档 {stats['clicks']} 次，图 {stats['figSvgs']}/{stats['figBlocks']} 张渲染出 svg"
           f"（滞留源码 {stats['figRaw']} 张、找不到形状 {stats['orphan']} 条），"
           f"图内底色来源 {stats['via']}，耗时 {dur:.0f}s")

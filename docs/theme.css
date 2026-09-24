@@ -953,7 +953,16 @@ section.cover hr {
 }
 
 @media (max-width: 768px) {
-  :root { --sidebar-w: 280px; }
+  /* 窄屏顶栏改成两行：第一行是"书名 + 控件带"，第二行才是导航条。
+     为什么必须动顶栏而不是动控件：正文栏是通栏的，任何悬浮方块（原来的 ☰ 在
+     左下、☀↑ 在右下）都必然压在某一行字上——实测 390×844 时
+     .sidebar-toggle 落在 [24,776,44×44]、#btn-theme 落在 [334,740,40×40]，
+     两条命中测试都打在正文 <li> 上。给正文补 padding-bottom 只能救最后一行，
+     救不了滚动途中的每一行。收进不透明的顶栏后，遮挡边界是一条干净的横线。 */
+  :root {
+    --sidebar-w: 280px;
+    --navbar-h: 84px;   /* = 控件带 40 + 导航条 44；.content/.sidebar/scroll-margin 全走这个 token */
+  }
 
   .sidebar {
     transform: translateX(-100%);
@@ -965,16 +974,50 @@ section.cover hr {
 
   .content { left: 0; }
 
-  .sidebar-toggle { display: flex; }
+  /* ☰ 从左下角搬进控件带左端：仍然是 docsify 自己那个 button，
+     只改定位不改 DOM——搬动节点会被路由重渲染吃掉。 */
+  .sidebar-toggle {
+    display: flex;
+    top: 2px;
+    bottom: auto;
+    left: 8px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border-color: var(--c-border);
+    box-shadow: none;
+  }
 
-  /* 顶栏：窄屏必须横向滚动，不能换行。
+  /* 第一行：书名居中，两端各留 52px 给 ☰ 和 ☀↑，文字不会顶到控件底下 */
+  .app-nav::before {
+    content: 'AI 原生软件工程';
+    flex: 0 0 40px;
+    height: 40px;
+    line-height: 40px;
+    padding: 0 52px;
+    text-align: center;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family: var(--font-serif);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    color: var(--c-text-2);
+    border-bottom: 1px solid var(--c-border-light);
+  }
+  .app-nav ul { flex: 0 0 44px; align-items: center; }
+
+  /* 第二行＝导航条：窄屏必须横向滚动，不能换行。
      父容器是 position:fixed + height:var(--navbar-h) 的硬高度，li 默认 flex-shrink:1，
-     五个中文项被压扁后在 60px 条内折成 2–3 行并溢出裁切。
+     五个中文项被压扁后会在条内折成 2–3 行并溢出裁切。
      justify-content 从 flex-end 改成 flex-start：否则内容超宽时右侧（最后一个链接）
-     滚不进来。 */
+     滚不进来。cross-axis 用 stretch，两行各自撑满宽度。 */
   .app-nav {
-    padding: 0 12px;
+    flex-direction: column;
+    align-items: stretch;
     justify-content: flex-start;
+    padding: 0 12px;
   }
 
   .app-nav ul {
@@ -1811,8 +1854,18 @@ html[data-theme='dark'] kbd { background: var(--c-bg-soft); }
 #btn-back-top { transition: all .25s; }
 
 @media (max-width: 768px) {
-  .float-controls { right: 16px; bottom: 16px; gap: 8px; }
-  .float-btn { width: 40px; height: 40px; border-radius: 10px; }
+  /* 控件带右端：☀ 与 ↑ 横排收进顶栏第一行，正文区从此没有任何悬浮方块。
+     尺寸 36px 是被 40px 的控件带高度逼出来的——带高与按钮高是一对，
+     改一个必须改另一个，否则按钮会溢出到第二行导航条上。 */
+  .float-controls { top: 2px; right: 8px; bottom: auto; flex-direction: row; gap: 4px; }
+  .float-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border-color: var(--c-border);
+    box-shadow: none;
+  }
+  .float-btn:hover { transform: none; }
 }
 
 /* ============================== 封面页隐藏 UI 杂件 ============================== */

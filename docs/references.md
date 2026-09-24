@@ -89,7 +89,7 @@
 
 **B 档卡里仍然没核到手的，照实留在卡面上**：`sentry-cli` 自己的版本号（本轮只核了 SDK 那条线）、`kafka-topics.sh --create --replication-factor` 的精确 flag 拼法、`redis-cli INFO` 的整行样例输出、`Prometheus /api/v1/alerts` 中 `state` 的全部取值、Grafana `/api/health` 的故障态返回、Semgrep 规则必需键表（`docs.semgrep.dev/writing-rules/*` 的这两个路径本机 404，卡里的键名仍按转述登记）、LangChain 运行后的重试日志形状（官方未给样例，卡内那一格是空的）、以及 `foundry.toml` 的目录布局键（`src` / `out` / `libs` 的精确键名与缺省值本轮未逐字核对，所以案例三那张卡里**没有**写它们）。**这些不是"暂未写全"，是"这些行你还不能信"。**
 
-**本轮从"未核实"转成"有读数"的两件**：Trivy 的小版本（先前记的是"`api.github.com` 限流取不到"，改走 `releases.atom` 一次到位）与 Sentry 的判据行（先前判 C 档，理由是文档没有输出样例；后来从源码 `src/commands/info.rs` 取到）。**教训是取数路径，不是取数结论**：`api.github.com` 会 403、文档子页会 404/超时，而 `releases.atom` 与 `raw.githubusercontent.com` 两条路不需要鉴权也没有那层限流——**"取不到"要先怀疑口径，再落成"未核实"。**
+**本轮从"未核实"转成"有读数"的两件**：Trivy 的小版本（先前记的是"`api.github.com` 限流取不到"，改走 `releases.atom` 一次到位）与 Sentry 的判据行（先前判 C 档，理由是文档没有输出样例；后来从源码 `src/commands/info.rs` 取到）。**教训是取数路径，不是取数结论**：`api.github.com` 会 403、文档子页会 404/超时，而 `releases.atom` 与 `raw.githubusercontent.com` 两条路不需要鉴权也没有那层限流——**「取不到」要先怀疑口径，再落成「未核实」。**
 
 **整件工具出不了卡的，台账里留了行**：Mythril / Slither（案例三闸门二的第 2、3 层）与 oasdiff / buf 的判据行（案例一的契约仓）——本轮取不到可核对的判据行，判 **C 档**，正文保留点名但不给配置。Sentry 已升 B 档出卡（卡在第 21 章）。
 
