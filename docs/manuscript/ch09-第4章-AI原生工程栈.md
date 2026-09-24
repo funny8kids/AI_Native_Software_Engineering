@@ -43,10 +43,10 @@ flowchart LR
   P2 --> P3["一切可回溯<br/>监控兜底"]
   P3 --> P4["文档即代码<br/>决策留痕"]
   P4 -.反馈约束.-> P1
-  style P1 fill:#eae4d6,stroke:#2f6154,color:#1e1c19
-  style P2 fill:#e2ebdf,stroke:#3e7247,color:#1e1c19
-  style P3 fill:#f4e6da,stroke:#8a4b1c,color:#1e1c19
-  style P4 fill:#e9e2ea,stroke:#6a4a78,color:#1e1c19
+  style P1 fill:#f1ece1,stroke:#2f6154,color:#1e1c19
+  style P2 fill:#e9f1e6,stroke:#3e7247,color:#1e1c19
+  style P3 fill:#faece4,stroke:#8a4b1c,color:#1e1c19
+  style P4 fill:#f1ecf2,stroke:#6a4a78,color:#1e1c19
 ```
 
 **图 4-1｜四支柱** — 少一个支柱，AI 失灵时就少一道兜底；四者必须一起搭。
@@ -69,10 +69,10 @@ flowchart LR
   F2["漏字段 · 推断当验证"] --> P2["支柱二 · 一切可验证"]
   F3["偏差数小时无人察觉"] --> P3["支柱三 · 一切可回溯"]
   F4["决策与约束无记录"] --> P4["支柱四 · 文档即代码"]
-  style P1 fill:#eae4d6,stroke:#2f6154,color:#1e1c19
-  style P2 fill:#e2ebdf,stroke:#3e7247,color:#1e1c19
-  style P3 fill:#f4e6da,stroke:#8a4b1c,color:#1e1c19
-  style P4 fill:#e9e2ea,stroke:#6a4a78,color:#1e1c19
+  style P1 fill:#f1ece1,stroke:#2f6154,color:#1e1c19
+  style P2 fill:#e9f1e6,stroke:#3e7247,color:#1e1c19
+  style P3 fill:#faece4,stroke:#8a4b1c,color:#1e1c19
+  style P4 fill:#f1ecf2,stroke:#6a4a78,color:#1e1c19
 ```
 
 **图 4-2｜四支柱纵深：每根支柱接住哪类失灵** — 失灵模式不会消失，只能被支柱接住；缺一根，对应那类失灵直通生产。

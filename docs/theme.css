@@ -14,13 +14,13 @@
    mask-image 的黑白遮罩、@media print 的强制黑白、以及代码高亮（prism）的调色板。 */
 :root {
   /* Surfaces — 桌面比书叶深一档，阅读栏因此像一张压在桌上的纸 */
-  --c-desk:        #efeae0;   /* 桌面：侧栏与正文栏之外的余白 */
-  --c-bg:          #fbf8f2;   /* 书叶：阅读栏本身 */
-  --c-bg-soft:     #f5f1e7;   /* 卡片底（图、提示框） */
-  --c-bg-sidebar:  #f3eee4;
-  --c-bg-elevated: #eae4d6;
-  --c-bg-hover:    #e6dfcf;
-  --c-bg-code:     #f4f0e5;
+  --c-desk:        #f7f5f0;   /* 桌面：侧栏与正文栏之外的余白 */
+  --c-bg:          #fffefb;   /* 书叶：阅读栏本身 */
+  --c-bg-soft:     #fbf9f4;   /* 卡片底（图、提示框） */
+  --c-bg-sidebar:  #faf8f3;
+  --c-bg-elevated: #f6f3ec;
+  --c-bg-hover:    #f2ede3;
+  --c-bg-code:     #faf8f2;
 
   /* Text — 墨（带一点暖底，不写死纯黑） */
   --c-text:       #1e1c19;
@@ -29,16 +29,16 @@
   --c-text-dim:   #6f6759;   /* 11–12px 小字要过 4.5:1，实测 4.8:1（第八条守卫） */
 
   /* Borders */
-  --c-border:       #e2dacc;
-  --c-border-light: #ede7db;
-  --c-border-strong:#c9bfa9;
+  --c-border:       #ece6db;
+  --c-border-light: #f4f0e8;
+  --c-border-strong:#d9d1c1;
 
   /* Accent — 铜绿：链接、当前条目、图号、焦点环，全站只有它 */
-  --c-accent:        #2f6154;
-  --c-accent-hover:  #234a40;
-  --c-accent-light:  #6f9a8e;
-  --c-accent-soft:   rgba(47,97,84,.10);
-  --c-accent-bg:     rgba(47,97,84,.06);
+  --c-accent:        #2b7159;
+  --c-accent-hover:  #1f5a48;
+  --c-accent-light:  #5e8f81;
+  --c-accent-soft:   rgba(43,113,89,.12);
+  --c-accent-bg:     rgba(43,113,89,.07);
 
   /* 图内填充：mermaid 的 themeVariables 从这里取，不再在 index.html 里另写一套色值 */
   /* 图版（plate）——全书 107 张 mermaid 的颜色只有这一个出处，且**深档不覆盖**：
@@ -47,34 +47,34 @@
      渲染失败、节点直接消失），而正文里 160 条 style 行各自带着字面量色值。
      所以图版色走「固定彩版」路线，由第八条守卫 check_palette.py 逐条比对：
      markdown 里出现的每一个 fill/stroke/color 字面量都必须等于本组令牌的值。 */
-  --c-plate:        #f5f1e7;   /* 图版卡底 */
-  --c-plate-edge:   #e2dacc;   /* 图版卡边 */
+  --c-plate:        #fbf8f1;   /* 图版卡底 */
+  --c-plate-edge:   #ebe4d7;   /* 图版卡边 */
   --c-plate-ink:    #1e1c19;   /* 图内文字 */
   --c-plate-line:   #6e675c;   /* 图内连线 */
   --c-plate-accent: #2f6154;   /* 图内强调（默认节点描边） */
-  --c-plate-node:   #eae4d6;   /* 默认节点底 */
-  --c-plate-red:      #f0dfd9;  --c-plate-red-line:    #a03b31;
-  --c-plate-amber:    #f2e7d3;  --c-plate-amber-line:  #9d6127;
-  --c-plate-green:    #e2ebdf;  --c-plate-green-line:  #3e7247;
-  --c-plate-orange:   #f4e6da;  --c-plate-orange-line: #8a4b1c;
-  --c-plate-purple:   #e9e2ea;  --c-plate-purple-line: #6a4a78;
-  --c-plate-gray:     #e6e0d4;  --c-plate-gray-line:   #c9bfa9;
+  --c-plate-node:   #f1ece1;   /* 默认节点底 */
+  --c-plate-red:      #f7e8e3;  --c-plate-red-line:    #a03b31;
+  --c-plate-amber:    #f8efdf;  --c-plate-amber-line:  #9d6127;
+  --c-plate-green:    #e9f1e6;  --c-plate-green-line:  #3e7247;
+  --c-plate-orange:   #faece4;  --c-plate-orange-line: #8a4b1c;
+  --c-plate-purple:   #f1ecf2;  --c-plate-purple-line: #6a4a78;
+  --c-plate-gray:     #eee8dc;  --c-plate-gray-line:   #c9bfa9;
   --c-plate-black:    #1e1c19;  --c-plate-black-line:  #141310;
-  --c-plate-onblack:  #fbf8f2;
+  --c-plate-onblack:  #fefcf8;
 
   /* 合成层：需要半透明叠色时，只在这里合成一次，规则里一律 var() 引用 */
-  --c-nav-bg:     rgba(251,248,242,.86);   /* 顶栏：书叶色压半透，滚动时仍透纸纹 */
+  --c-nav-bg:     rgba(255,254,251,.88);   /* 顶栏：书叶色压半透，滚动时仍透纸纹 */
   --c-scrim:      rgba(30,28,25,.035);     /* 卡头上方的极淡压暗渐变 */
-  --c-sel-bg:     #d3e2da;                 /* 选中文本：铜绿浅底，不用浏览器默认蓝 */
+  --c-sel-bg:     #d2e9df;                 /* 选中文本：铜绿浅底，不用浏览器默认蓝 */
   --c-sel-fg:     #16281f;
-  --c-tint:       rgba(47,97,84,.055);     /* 章首元信息卡的底色渐变起点 */
-  --c-tint-2:     rgba(47,97,84,.025);
-  --c-hairline:   rgba(47,97,84,.22);      /* 强调色细线 */
+  --c-tint:       rgba(43,113,89,.06);     /* 章首元信息卡的底色渐变起点 */
+  --c-tint-2:     rgba(43,113,89,.03);
+  --c-hairline:   rgba(43,113,89,.24);      /* 强调色细线 */
   --c-warn-bg:    rgba(157,97,39,.055);    /* 嵌套引言：朱/橙只作语义提示底 */
-  --c-photo-shade: rgba(30,28,25,.22);     /* 卷首艺术图底部的压暗带 */
+  --c-photo-shade: rgba(30,28,25,.12);     /* 卷首艺术图底部的压暗带（提亮轮：.22→.12，压带不再把整张版画压灰） */
   --c-badge-bg:   rgba(30,28,25,.72);      /* 图上的序号牌：两主题同为「照片上压墨」，压到 6:1 才配得上 13px 白字 */
   --c-badge-fg:   #f8f5ee;
-  --c-art-shadow: rgba(47,97,84,.20);      /* 封面艺术图的强调色投影 */
+  --c-art-shadow: rgba(43,113,89,.22);      /* 封面艺术图的强调色投影 */
   --c-print-paper: #fff;                   /* 打印档：纸面白纸黑墨是印刷约定，不随屏幕主题翻，
                                                 所以深档块里给同值；写在这里是为了让「规则里零字面量」
                                                 这条闸不需要为 @media print 开口子 */
@@ -651,7 +651,7 @@ article.markdown-section,
    所以两张纸不可能对不上：SVG 里的纸色与卡底 token 同源，板外色由引擎自己判红。
    ① 版式按"贴进书页的铜版"处理——细边 + 落地阴影，不加圆角大图那种悬浮感；
    ② 题图两档同一张纸（不跟 --c-bg 翻），深档里它是压在暗页面上的一张浅色纸，
-      边线在浅档才起作用（浅档页底 #fbf8f2 与纸底 #f5f1e7 几乎同色，不描边就糊成一块）；
+      边线在浅档才起作用（浅档页底 #fffefb 与纸底 #fbf8f1 几乎同色，不描边就糊成一块）；
    ③ 版心 12:5，390 档缩到约 133px 高。这里不横向滚动：题图是论点不是数据，
       让读者在手机上拖着看一张装饰图，比承认细线在小图里变淡更糟。 */
 .markdown-section figure.chapter-plate {
@@ -1616,13 +1616,13 @@ html[data-theme='dark'] {
 
   /* 深档不是浅档的反色：底色是「灯下的深色卡纸」（暖墨，带棕底），
      文字是暖白而非纯白，铜绿提亮成淡铜绿——同一套色相，不同的明度关系。 */
-  --c-desk:        #121110;
-  --c-bg:          #1a1815;
-  --c-bg-soft:     #211e1a;
-  --c-bg-sidebar:  #171512;
-  --c-bg-elevated: #29241e;
-  --c-bg-hover:    #332d25;
-  --c-bg-code:     #1f1c18;
+  --c-desk:        #191713;
+  --c-bg:          #211e1a;
+  --c-bg-soft:     #2a2621;
+  --c-bg-sidebar:  #1d1b17;
+  --c-bg-elevated: #332e27;
+  --c-bg-hover:    #3d372e;
+  --c-bg-code:     #262219;
 
   --c-text:       #ece6da;
   --c-text-2:     #c8c0b1;
@@ -1630,28 +1630,28 @@ html[data-theme='dark'] {
   --c-text-dim:   #948a79;   /* 页脚与翻页小字：上一版在深档实测 4.62–4.67:1，
                                 只比 4.5:1 的门多 0.12；提到这里留出余量，仍暗于 --c-text-3 */
 
-  --c-border:        #332e26;
-  --c-border-light:  #29241e;
-  --c-border-strong: #4b4437;
+  --c-border:        #3c362c;
+  --c-border-light:  #332e27;
+  --c-border-strong: #59513f;
 
-  --c-accent:       #8fbdb0;
-  --c-accent-hover: #a9cdc2;
-  --c-accent-light: #5f8d80;
-  --c-accent-soft:  rgba(143,189,176,.16);
-  --c-accent-bg:    rgba(143,189,176,.09);
+  --c-accent:       #9cc7b9;
+  --c-accent-hover: #b6d7ce;
+  --c-accent-light: #6f9d8e;
+  --c-accent-soft:  rgba(156,199,185,.18);
+  --c-accent-bg:    rgba(156,199,185,.10);
 
-  --c-nav-bg:     rgba(26,24,21,.82);
+  --c-nav-bg:     rgba(33,30,26,.84);
   --c-scrim:      rgba(0,0,0,.45);
-  --c-sel-bg:     #3d6154;
+  --c-sel-bg:     #46705f;
   --c-sel-fg:     #f4efe4;
-  --c-tint:       rgba(143,189,176,.075);
-  --c-tint-2:     rgba(143,189,176,.025);
-  --c-hairline:   rgba(143,189,176,.30);
+  --c-tint:       rgba(156,199,185,.08);
+  --c-tint-2:     rgba(156,199,185,.03);
+  --c-hairline:   rgba(156,199,185,.32);
   --c-warn-bg:    rgba(213,160,102,.08);
   --c-photo-shade: rgba(0,0,0,.5);
   --c-badge-bg:   rgba(0,0,0,.58);
   --c-badge-fg:   #f8f5ee;
-  --c-art-shadow: rgba(143,189,176,.14);
+  --c-art-shadow: rgba(156,199,185,.16);
   --c-print-paper: #fff;                   /* 打印不跟屏幕主题翻：与浅档同值，写全是为了令牌键集合对齐 */
   --c-print-ink:   #000;
   --c-sheet-hi:   rgba(46,41,33,.55);

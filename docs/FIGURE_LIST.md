@@ -87,6 +87,8 @@
 | 案例一～四头图 | `docs/assets/case-{ecommerce,exchange,quant,agent}.webp` | 完成 |
 | 九部分卷首艺术 | `docs/assets/part1-cognition … part9-convergence.webp`（9 张） | 完成 |
 
+**这批位图的颜色不是自己的**：它们是 AI 冷生成后由 `scripts/recolor_plate_art.py` 重着色到 `--c-plate` / `--c-plate-ink` / `--c-plate-accent` 三锚上的派生件（亮部=纸、暗部=墨、原图带饱和度的那一层=铜绿），所以**改配色必须重跑它**，否则图停在旧纸色上。这一层在第八条闸的 DOM 里量不到——`<img>` 对外只有一个盒子，像素在里面。做法是重着色成功后由脚本自己落一张锚点回执 `docs/assets/plate-art-anchor.json`（三个锚的当时令牌值 + 重着色张数），第八条逐键拿它跟 `theme.css` 对账：缺回执、少键、多未知键、值不等、张数不等一律报红，变异 P11 打在"回执里的纸底停在图版另一色"这个形状上。`cover.webp`（无引用的遗留件）不参与对账也不重着色。**为什么用回执而不是量像素**：试过直接量图里的纸底色跟令牌比，一张刚重着色完的图离自己的锚有 2.4–5.4 的通道距离（版画是渐变加抖动，纸底不是一个纯色），而停在旧锚的 HEAD 图离**新**锚只有 2.9–4.9——距离口径分不开这两件事，判据就会既漏又误报；锚点回执是写手自己落的凭据，逐键精确相等，且能同时抓住"没重跑""少跑一张""回执被手编"三种形状。
+
 ## 题图（手工版画 SVG，9 张，共 164.9 KB）
 
 九个**部分开卷章**各一张，母题不重复。体积逐张由 `ls` 实测，不是估的。
@@ -141,9 +143,12 @@ python3 scripts/check_legibility.py                   # 第七条：有效字号
 python3 scripts/check_legibility.py --report          # 逐图输出 自然字号 / 有效字号 / 缩放
 python3 scripts/check_legibility.py --mutate          # 第七条的变异自检 A–G：每条判据各自要能报红（F＝表格不再被套进滚动层；G＝封面入口改名）
 python3 scripts/check_palette.py                      # 第八条：token 纪律 + 逐层 alpha 合成后的对比度（真浏览器、真点 #btn-theme）
-python3 scripts/check_palette.py --mutate             # 第八条的变异自检 P1–P10：每条判据各自要能报红（P10＝封面入口改名，首页正文无从抵达）
+python3 scripts/check_palette.py --mutate             # 第八条的变异自检 P1–P11：每条判据各自要能报红（P10＝封面入口改名，首页正文无从抵达；P11＝位图锚点回执停在图版另一色，派生件对账在工作）
 python3 scripts/check_palette.py --screenshot DIR     # 1280/1440/390 × 浅/深 逐页截图（题图与配色改动后逐项复核用这条）
 python3 scripts/plate_engine.py --check               # 题图引擎自检：板外色 / XML 解析 / 含 <text> 三种都判红
+python3 scripts/plate_engine.py --emit --no-preview    # 按当前 --c-plate* 令牌重发九张题图 SVG（改过图版令牌必跑；不发到 /tmp 之外等于没改）
+python3 scripts/recolor_plate_art.py --check          # 位图只量不改：冷调 / 暖调 / 墨线三条读数
+python3 scripts/recolor_plate_art.py                  # 位图重着色到当前三锚，零不达标才写锚点回执（改过图版令牌必跑，否则第八条 P11 报红）
 # 浏览器端：对 107 个围栏逐个 mermaid.parse（本表刷新时 107/107 通过）
 # 口径边界（读到"全站"两个字之前先看这五行）：首页 `#/` 的正文压在封面下，所以每条闸都要先声明自己是**量正文**还是**量封面**。
 # 第七、九、五、六、八条这五条走同一份揭幕链 `check_legibility.dismiss_cover`：真点封面上那条「全书架构」，等 `.cover.show` 消失之后再量正文

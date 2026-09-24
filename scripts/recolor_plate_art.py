@@ -7,11 +7,17 @@ ch37 深档 3.3 %，全是冷灰与淡紫）。它们是线描版画，重着色
 而且这一步是可重跑的：判据（板外色占比）由脚本自己打印，前后各量一次。
 
 用法：python3 scripts/recolor_plate_art.py [--check]   # --check 只量不改
+
+落盘契约：一次零不达标的重着色成功后，由本脚本自己写 docs/assets/plate-art-anchor.json
+（三个锚的**当时令牌值** + 重着色张数）。人不手编这张回执；第八条守卫逐键拿它跟
+theme.css 对账——位图是派生件，DOM 里只看到一个 <img> 盒子，令牌改了而位图没跟着重跑
+这件事在浏览器口径下不可见，所以必须有一张由写手自己落的凭据。
 """
 from __future__ import annotations
 
 import argparse
 import collections
+import json
 import re
 import sys
 from pathlib import Path
@@ -42,6 +48,10 @@ TOK = tokens()
 PAPER = hx(TOK["--c-plate"])             # 图版纸底：亮部锚
 INK = hx(TOK["--c-plate-ink"])           # 墨：暗部锚
 ACCENT = hx(TOK["--c-plate-accent"])     # 铜绿：只给原来带饱和度的那一层
+# 这三个锚就是上面三行读的令牌——名字写死一份给锚点回执行用；三行在 import 期取值，
+# 少任何一个都会 KeyError 当场停（不需要再加一道"令牌是否存在"的空判）。
+ANCHOR_KEYS = ("--c-plate", "--c-plate-ink", "--c-plate-accent")
+ANCHOR_LEDGER = ASSETS / "plate-art-anchor.json"
 _A = {k: np.array(v, dtype=np.float64) / 255.0
       for k, v in dict(PAPER=PAPER, INK=INK, ACCENT=ACCENT).items()}
 LUM_W = np.array([0.2126, 0.7152, 0.0722])
@@ -206,9 +216,14 @@ def main() -> int:
     for r in reds:
         print(f"  ✗ {r}")
     if reds:
-        print(f"[结论] {len(reds)} 条不达标")
+        print(f"[结论] {len(reds)} 条不达标——**不落锚点回执**，改前的位图仍对应旧锚")
         return 1
     print("[结论] 0 条不达标：冷调已清零，且墨线亮度未被抬走")
+    ledger = {"anchors": {k: TOK[k] for k in ANCHOR_KEYS}, "recolored": len(names)}
+    ANCHOR_LEDGER.write_text(json.dumps(ledger, ensure_ascii=False, indent=2) + "\n")
+    print(f"[锚点回执] {ANCHOR_LEDGER.relative_to(ROOT)} ← "
+          + "  ".join(f"{k}={TOK[k]}" for k in ANCHOR_KEYS)
+          + f"  重着色 {len(names)} 张（第八条守卫逐键对账这张）")
     return 0
 
 

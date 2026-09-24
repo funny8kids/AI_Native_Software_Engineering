@@ -8,9 +8,14 @@
 ① token 纪律（静态）：theme.css 里除两个令牌块之外不得出现字面量色值；例外只有两类
    （mask-image 的黑白遮罩、@media print 的强制黑白）。代码高亮**不是**例外——曾经它是，
    那段豁免让深档一整块八字面量代码色合法存在，改版全程没报过红。
-   书稿 markdown 的 160 条 mermaid `style/classDef/linkStyle` 指令行同理：mermaid 不认
+   书稿 markdown 里全部 mermaid `style/classDef/linkStyle` 指令行同理（条数由本闸自己
+   打印，注释里不复述，免得变成一条会腐烂的静态计数）：mermaid 不认
    `var()`（实测写 var() 的那条 style 会让整张图渲染失败），所以图版只能带字面量——
    那这些字面量就必须逐个等于 theme.css 里 --c-plate-* 令牌的值，否则就是第二个事实源。
+   同一条纪律再往下一层：index.html 的 JS 兜底色、以及 docs/assets 下位图版画的
+   **锚点回执**（张数由本闸自己打印，注释里不复述：位图会增删，写死的计数第一天就旧了。
+   位图是派生件，DOM 侧只有一个 <img> 盒子，浏览器口径量不到它里面，只能拿重着色
+   脚本自己落的回执对账）。
 ② 正文对比度（浏览器）：逐页逐文本节点取前景色，沿祖先链**逐层 alpha 合成**出真正的底色，
    再算 WCAG 对比度；正文 ≥4.5:1，大字（≥24px，或 ≥18.66px 且加粗）≥3:1。
    不合成就算 = 假绿：顶栏、渐隐层、封面高光都是半透明的。
@@ -23,7 +28,7 @@
 
 用法：
     python3 scripts/check_palette.py                        # 全量：62 条路由 × 1280/1440/390 × 浅/深
-    python3 scripts/check_palette.py --mutate               # 变异自检：P1–P10 各自要能被打红
+    python3 scripts/check_palette.py --mutate               # 变异自检：P1–P11 各自要能被打红
     python3 scripts/check_palette.py --screenshot DIR       # 供人工逐项复核的截图
     python3 scripts/check_palette.py --report               # 打印对比度最低的若干对前景/底色
 
@@ -154,6 +159,42 @@ def scan_mermaid_palette(docs_dir: Path, light: dict[str, str]) -> tuple[list[st
     if seen < 100:
         raise SystemExit(f"只数到 {seen} 条 mermaid 颜色指令（<100）——口径可疑，中止")
     return fails, seen
+
+
+def scan_raster_anchor(docs_dir: Path, light: dict[str, str]) -> tuple[list[str], int]:
+    """判据①·第四层：位图资产的**锚点回执**必须等于当前令牌。
+
+    docs/assets 下那批 AI 版画 webp 是派生件——它们的纸/墨/铜绿三个锚是 `recolor_plate_art.py`
+    重着色当时从 theme.css 读的。第八条的浏览器口径对 `<img>` 只看到一个盒子，量不到里面，
+    所以"令牌改了、位图没跟着重跑"这件事在 DOM 里不可见。做法：重着色成功后由脚本自己
+    落一张回执（人不手编），这里逐键判相等；缺回执、少键、多未知键、值不等、张数不等
+    一律报红。张数不进本注释——它由这里算出来并打印，写死就是第一天就旧了的计数。
+    2026-09-25 提亮轮暴露这条洞时，SVG 题图有 `plate_engine --check` 当场报 26 条板外色，
+    而位图这边没有任何执行者。
+    """
+    led = docs_dir / "assets" / "plate-art-anchor.json"
+    keys = ("--c-plate", "--c-plate-ink", "--c-plate-accent")
+    if not led.is_file():
+        return ([f"[assets/plate-art-anchor.json] 没有锚点回执——位图是否按当前令牌重跑过，"
+                 f"无从核对（跑一次 python3 scripts/recolor_plate_art.py 由它自己写）"], 0)
+    rec = json.loads(led.read_text())
+    anchors = rec.get("anchors", {})
+    fails = []
+    for k in keys:
+        if k not in anchors:
+            fails.append(f"[plate-art-anchor.json] 锚点回执缺 {k}——重着色脚本没记它，或回执被手编")
+        elif k not in light:
+            fails.append(f"[plate-art-anchor.json] 锚点回执里的 {k} 在 theme.css 查无此令牌")
+        elif anchors[k].strip().lower() != light[k].strip().lower():
+            fails.append(f"[plate-art-anchor.json] 锚点回执的 {k} = {anchors[k]} ≠ theme.css 的 "
+                         f"{light[k]}——位图停在旧锚，重跑 recolor_plate_art.py")
+    for k in sorted(set(anchors) - set(keys)):
+        fails.append(f"[plate-art-anchor.json] 锚点回执多了 {k}——脚本已经不写它了，删掉或补上读取方")
+    n = len([p for p in (docs_dir / "assets").glob("*.webp") if p.name != "cover.webp"])
+    if rec.get("recolored") != n:
+        fails.append(f"[plate-art-anchor.json] 锚点回执记 {rec.get('recolored')} 张，"
+                     f"docs/assets 下实有 {n} 张位图（除 cover.webp）——新落的图没重着色")
+    return fails, n
 
 
 # ============================== 静态：图版令牌 ↔ JS 兜底表 ==============================
@@ -772,15 +813,36 @@ MUT_PAGES = ["", "README", "manuscript/ch09-第4章-AI原生工程栈"]
 MUT_VIEWS = [(1280, 900, False), (390, 844, True)]
 
 CH09 = "manuscript/ch09-第4章-AI原生工程栈.md"
-ANCHOR_D1 = "  P4 -.反馈约束.-> P1\n  style P1 fill:#eae4d6,stroke:#2f6154,color:#1e1c19"
+ANCHOR_D1 = "  P4 -.反馈约束.-> P1\n  style P1 fill:#f1ece1,stroke:#2f6154,color:#1e1c19"
 ANCHOR_D2 = '  F4["决策与约束无记录"] --> P4["支柱四 · 文档即代码"]\n' \
-            "  style P1 fill:#eae4d6,stroke:#2f6154,color:#1e1c19"
+            "  style P1 fill:#f1ece1,stroke:#2f6154,color:#1e1c19"
+
+# 探针在深/浅两档各读一次、再逐键比是否换了色的令牌（--c-plate 单独判「不许跟档翻」）。
+PROBE_OFFPLATE = ("--c-desk", "--c-bg", "--c-text", "--c-accent")
+# 变异样本里的色值**一律从当前 theme.css 现取**，不写死：P4 的坏形状是「深档被指回浅档值」，
+# 一旦浅档改色（2026-09-25 提亮轮就是），写死的旧浅档值会让样本自己不再等于浅档基线，
+# 于是「令牌一个都没变」这条判据对着一个已经不坏的样本闭嘴——表现为「变异存活」的假红。
+_P4_LIGHT, _ = parse_tokens(THEME.read_text())
+_missing = [k for k in PROBE_OFFPLATE if k not in _P4_LIGHT]
+if _missing:
+    raise SystemExit(f"P4 的变异载荷取不到浅档令牌 {_missing}——口径可疑，中止")
+P4_CSS = ('  <link rel="stylesheet" href="theme.css">\n'
+          "  <style>/* 变异 P4 */ html[data-theme='dark']{"
+          + "".join(f"{k}:{_P4_LIGHT[k]};" for k in PROBE_OFFPLATE) + "}</style>")
+# 同理，P11 的锚串也从当前令牌现拼（写死会让浅档一改色就找不到锚、表现为假红）。
+for _k in ("--c-plate", "--c-plate-node"):
+    if _k not in _P4_LIGHT:
+        raise SystemExit(f"P11 的变异载荷取不到浅档令牌 {_k}——口径可疑，中止")
+if _P4_LIGHT["--c-plate"].lower() == _P4_LIGHT["--c-plate-node"].lower():
+    raise SystemExit("P11 需要「纸底」与「节点底」是两个不同的色，否则坏样本不坏")
+P11_OLD = f'"--c-plate": "{_P4_LIGHT["--c-plate"].lower()}"'
+P11_NEW = f'"--c-plate": "{_P4_LIGHT["--c-plate-node"].lower()}"'
 
 MUTATIONS = [
     ("P1 正文灰到看不清（--c-text-3 提到接近纸色）", "theme.css",
      "  --c-text-3:     #6e675c;", "  --c-text-3:     #ded9cf;", "正文对比度"),
     ("P2 图内文字与节点同色（标签改成图版卡底色）", CH09,
-     ANCHOR_D1, "  P4 -.反馈约束.-> P1\n  style P1 fill:#eae4d6,stroke:#2f6154,color:#f5f1e7",
+     ANCHOR_D1, "  P4 -.反馈约束.-> P1\n  style P1 fill:#f1ece1,stroke:#2f6154,color:#fbf8f1",
      "图内文字对比度"),
     ("P3 规则里塞回一个硬编码色（token 纪律）", "theme.css",
      "", "\n.markdown-section h2 { color: #1a1d23; }\n", "字面量色值"),
@@ -792,11 +854,7 @@ MUTATIONS = [
     # 打在 index.html 而不是 theme.css：截空 theme.css 的令牌块会让静态口径直接中止
     # （那是量具坏了，不是判据抓到红），而且会顺带触发 P3 的「字面量色值」针。
     ("P4 深档令牌被更靠后的同名规则指回浅档值（只挂属性不换色）", "index.html",
-     '  <link rel="stylesheet" href="theme.css">',
-     '  <link rel="stylesheet" href="theme.css">\n'
-     "  <style>/* 变异 P4 */ html[data-theme='dark']{"
-     "--c-desk:#efeae0;--c-bg:#fbf8f2;--c-text:#1e1c19;--c-accent:#2f6154}</style>",
-     "令牌一个都没变"),
+     '  <link rel="stylesheet" href="theme.css">', P4_CSS, "令牌一个都没变"),
     ("P5 mermaid 用了图版之外的色（第二个事实源）", CH09,
      ANCHOR_D2, ANCHOR_D2.split("\n")[0] + "\n" +
      "  style P1 fill:#eef2ff,stroke:#4f46e5,color:#1a1d23",
@@ -822,6 +880,12 @@ MUTATIONS = [
     # 所以给"首页在场"这个新事实配一个会因它而拒绝执行的读者。
     ("P10 封面上那条「全书架构」入口改名（首页正文无从抵达）", "_coverpage.md",
      "[全书架构](README.md)", "[全书结构总览](README.md)", "正文无从揭幕"),
+    # 位图是派生件，DOM 侧只看到一个 <img> 盒子——令牌改了而位图没跟着重跑，第八条的
+    # 浏览器口径量不到。这条给「锚点回执」判据配一个坏样本，且故意打成一个**合法的图版色**
+    # （--c-plate-node）：如果判据只查"值在不在图版色板里"，这条会存活；它必须逐键等于
+    # 当前令牌值才算抓住"纸底停在旧锚"这件事。
+    ("P11 位图锚点回执的纸底停在图版另一色（派生件没跟着重跑）", "assets/plate-art-anchor.json",
+     P11_OLD, P11_NEW, "锚点回执"),
 ]
 
 
@@ -887,7 +951,7 @@ def run_mutations() -> int:
     return bad
 
 
-def static_fails(theme_path: Path = THEME, docs_dir: Path = DOCS) -> tuple[list[str], int, int, int]:
+def static_fails(theme_path: Path = THEME, docs_dir: Path = DOCS) -> tuple[list[str], int, int, int, int]:
     light, _dark = parse_tokens(theme_path.read_text())
     fails = scan_literal_colors(theme_path.read_text())
     md_fails, seen = scan_mermaid_palette(docs_dir, light)
@@ -895,7 +959,8 @@ def static_fails(theme_path: Path = THEME, docs_dir: Path = DOCS) -> tuple[list[
     if not index_path.is_file():
         raise SystemExit(f"{index_path} 不存在——兜底表口径无从校起，中止")
     fb_fails, refs, entries = scan_fig_fallback(index_path.read_text(), light)
-    return fails + md_fails + fb_fails, seen, refs, entries
+    ras_fails, raster = scan_raster_anchor(docs_dir, light)
+    return fails + md_fails + fb_fails + ras_fails, seen, refs, entries, raster
 
 
 def main() -> int:
@@ -913,7 +978,8 @@ def main() -> int:
     pages = ["ALL"] if args.pages == "ALL" else [p.strip() for p in args.pages.split(",")]
 
     if args.mutate:
-        print("[变异自检] 九条判据各自要能被按各自的机制打红")
+        print("[变异自检] 十一条变异各打红一条判据（P3/P8 同属 token 纪律，共十条），"
+              "且必须按各自的机制打红")
         bad = run_mutations()
         print(f"[变异自检] {'全部命中' if bad == 0 else str(bad) + ' 条变异存活——判据有失明'}")
         return 0 if bad == 0 else 1
@@ -923,11 +989,13 @@ def main() -> int:
         shot.mkdir(parents=True, exist_ok=True)
 
     light, dark = parse_tokens(THEME.read_text())
-    static, seen, refs, entries = static_fails()
+    static, seen, refs, entries, raster = static_fails()
     print(f"[静态] 浅档令牌 {len(light)} 个 / 深档覆盖 {len(dark)} 个；"
           f"mermaid 颜色指令 {seen} 条，全部等于 --c-plate-* 令牌值：{not any('不在图版令牌里' in f for f in static)}")
     print(f"[静态] index.html 读取的令牌 {refs} 个 / 兜底表 {entries} 项，"
           f"逐项与令牌相等：{not any('兜底' in f for f in static)}")
+    print(f"[静态] 位图派生件 {raster} 张（除 cover.webp），锚点回执逐键等于当前令牌："
+          f"{not any('锚点回执' in f for f in static)}")
     for f in static[:20]:
         print("  ✗", f)
 

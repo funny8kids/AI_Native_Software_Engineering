@@ -1,0 +1,8 @@
+{
+  "anchors": {
+    "--c-plate": "#fbf8f1",
+    "--c-plate-ink": "#1e1c19",
+    "--c-plate-accent": "#2f6154"
+  },
+  "recolored": 14
+}

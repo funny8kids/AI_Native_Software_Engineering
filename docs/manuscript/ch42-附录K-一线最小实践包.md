@@ -25,8 +25,8 @@ flowchart LR
   REL -->|刹车命中| INC[事故当夜清单]
   INC -.->|次日 ADR| CARD
   FIX -.-> CARD
-  style REL fill:#e2ebdf,stroke:#3e7247,color:#1e1c19
-  style INC fill:#f0dfd9,stroke:#a03b31,color:#1e1c19
+  style REL fill:#e9f1e6,stroke:#3e7247,color:#1e1c19
+  style INC fill:#f7e8e3,stroke:#a03b31,color:#1e1c19
 ```
 
 **图 K-1｜一线日常最小闭环** — 作战卡 → PR → 评审 → CI → 灰度 → 事故回灌，一张纸画得下，也一天做得完。

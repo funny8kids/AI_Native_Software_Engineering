@@ -11,7 +11,7 @@ flowchart LR
   ADR --> IM[实现 / AI 代码]
   IM -.追溯.-> ADR
   ADR --> TOK[设计令牌 / 契约同步]
-  style ADR fill:#eae4d6,stroke:#2f6154,color:#1e1c19
+  style ADR fill:#f1ece1,stroke:#2f6154,color:#1e1c19
 ```
 
 **图 25-1｜文档治理环** — 决策先于实现；没有 ADR 的代码在事故复盘时无法回答「谁定的」。
