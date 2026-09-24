@@ -53,7 +53,7 @@ DOCS = ROOT / "docs"
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from cdp import CDP, free_port, safe_text  # noqa: E402
-from check_legibility import routes_two_ways  # noqa: E402
+from check_legibility import routes_two_ways, dismiss_cover  # noqa: E402
 
 VIEWPORT = (1280, 900)
 
@@ -133,6 +133,12 @@ def audit(base: str, report: bool = False) -> tuple[list[str], dict]:
         routes = routes_two_ways(b, base)
         for path in routes:
             b.navigate(f"{base}/#/{quote(path)}")
+            # 首页的正文压在封面下：不揭幕就只能读到封面的字，那一读"0 个文本节点"的
+            # 空覆盖判据就会报红（本闸 2026-09-25 就是被第七条的枚举改动推着撞上这条的）。
+            why = dismiss_cover(b, base, path)
+            if why:
+                fails.append(f"[{path or '首页'}] {why}")
+                continue
             if not b.wait_for("document.querySelector('.markdown-section')", 25):
                 fails.append(f"[{path or '首页'}] .markdown-section 没出现——这一页没有对象可判，读数作废")
                 continue

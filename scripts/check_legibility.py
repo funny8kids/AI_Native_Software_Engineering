@@ -17,6 +17,11 @@
     python3 scripts/check_legibility.py --report       # 逐图打印自然字号/缩放/有效字号
     python3 scripts/check_legibility.py --screenshot DIR
 
+无论红绿都打印 `[覆盖率读数]`：每档视口下两类容器各有几页几个、其中几个真的需要横向滚动，
+并附 markdown 侧独立口径数出的表格数（与 DOM 侧 .table-scroll 数逐页判相等）。
+上面 ② 那两个数是立闸前体检时量出来的，写在本文档里；守卫自己从不打印对象数——
+读数不在守卫件的输出里，这条判据整条空跑也报通过，所以补成这一行。
+
 约定：零 CDN、零外部依赖，自带一次性本地服务器。退出码 0 = 全绿。
 """
 from __future__ import annotations
@@ -65,6 +70,9 @@ def parse_viewports(spec: str) -> list[tuple[int, int, bool]]:
 MUT_PAGES = ["README", "manuscript/ch03-案例时间线", "manuscript/ch05-数字清单",
              "manuscript/ch37-案例四-守夜人科技"]
 
+# 探针按这两类容器找横向滚动对象；缺一类就是渲染器不再产出它，要报而不是静默少判。
+SCROLL_CLASSES = ("mermaid-block", "table-scroll")
+
 PROBE_JS = r"""
 (async function (MIN_FONT, NARROW) {
   // 提示层带 .18s 淡入淡出：改完 scrollLeft 立刻读 getComputedStyle，读到的是
@@ -72,7 +80,7 @@ PROBE_JS = r"""
   // 为不让一页 22 张表就睡 22 次，这里分三段：一次把所有容器推到目标态 → 睡一次 → 读全部。
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   var out = {hash: location.hash, theme: document.documentElement.getAttribute('data-theme') || 'light',
-             mermaid: [], scrollers: []};
+             mermaid: [], scrollers: [], seen: {}};
 
   // ---- ① 每张图：自然字号 → 有效字号 ----
   [].forEach.call(document.querySelectorAll('.mermaid-block'), function (block, bi) {
@@ -121,10 +129,12 @@ PROBE_JS = r"""
   }
   var list = [];
   [].forEach.call(document.querySelectorAll('.mermaid-block, .table-scroll'), function (sc) {
+    var cls = sc.className.split(' ')[0];
+    out.seen[cls] = (out.seen[cls] || 0) + 1;   // 枚举到几个容器：先记数，再判是否需要滚
     var over = sc.scrollWidth - sc.clientWidth;
     if (over <= 2) return;                    // 不需要滚 → 无判据对象
     var frame = sc.closest('.scroll-frame');
-    var rec = {sel: sc.className.split(' ')[0], overflow: Math.round(over),
+    var rec = {sel: cls, overflow: Math.round(over),
                framed: !!frame, scroller: null};
     out.scrollers.push(rec);
     if (frame) {
@@ -152,6 +162,44 @@ PROBE_JS = r"""
   return JSON.stringify(out);
 })(%s, %s)
 """ % (MIN_EFFECTIVE_FONT, NARROW)
+
+
+# 首页封面那条「全书架构」入口：坐标取元素自身中心。找不到就返回 {}，
+# 由调用方判"无从揭幕"而不是静默跳过——正文在封面下面，揭幕失败就等于本页没量。
+COVER_CTA_JS = r"""
+(function () {
+  var a = [].slice.call(document.querySelectorAll('section.cover a'))
+    .filter(function (x) { return x.textContent.indexOf('全书架构') >= 0; })[0];
+  if (!a) return '{}';
+  var r = a.getBoundingClientRect();
+  if (!r.width || !r.height) return '{}';
+  return JSON.stringify({x: Math.round(r.left + r.width / 2),
+                         y: Math.round(r.top + r.height / 2)});
+})()
+"""
+
+
+def dismiss_cover(b: CDP, base: str, path: str) -> str:
+    """首页 `#/` 的正文压在封面之下：真点封面上那条「全书架构」入口把它揭幕。
+
+    返回空串表示可以接着量；否则返回一句可直接拼进 fails 的原因，调用方据此**作废本页读数**，
+    而不是静默跳过——封面没揭开时页面确实有 `.markdown-section` 之类的壳，量它会得到一堆假读数。
+
+    为什么真点而不是 `location.hash = ...` 赋值：赋值会把"这条 CTA 到底能不能用"一并跳过，
+    而那是首页这一页上唯一的入口判据。第七、九两条闸共用这一条链（第九条是通过 import 复用的
+    第三个读者——它先因为 `routes_two_ways` 开始返回首页而报红，红得对）。
+    """
+    if path != "":
+        return ""
+    # 先等封面自己挂出来：`section.cover` 是 _coverpage.md 到手之后才建的，
+    # 一到就查会查不到入口（第一次跑就是这样报的红）。
+    b.wait_for("document.querySelectorAll('section.cover a').length > 0", 25)
+    rect = json.loads(b.js(COVER_CTA_JS) or "{}")
+    if not rect:
+        return "封面上找不到「全书架构」入口——正文无从揭幕，本页读数作废"
+    b.click(rect["x"], rect["y"])
+    b.wait_for("!document.querySelector('section.cover.show')", 15)
+    return ""
 
 
 def routes_two_ways(cdp: CDP, base: str) -> list[str]:
@@ -193,13 +241,16 @@ def routes_two_ways(cdp: CDP, base: str) -> list[str]:
         raise SystemExit("枚举到 0 条路由——判据没有对象，中止")
     # 交回给采样循环的是**已解码的纯路径**（"README"、"manuscript/ch03-案例时间线"）：
     # 带着 `#` 或 %E4… 原样交回去，导航时会被二次转义成 %23，整趟就打在同一个坏页上。
-    # 首页（`#/`，norm 后为空）跳过：它是封面版面，没有 .markdown-section，
-    # 本闸两类判据（图字号、滚动暗示）在它身上都没有判据对象——跳过要说，不能算通过。
-    pages = [norm(x) for x in dom if norm(x)]
+    # 首页 `#/` 从 2026-09-25 起**不再跳过**。旧注释写的是"封面版面，没有 .markdown-section，
+    # 两类判据在它身上都没有判据对象"——那句话没被量过。真点封面上那条「全书架构」之后实测：
+    # 正文 14993 字、2 个 .mermaid-block 全渲染出 svg。按旧口径跳过的真实代价是全书 107 张图里
+    # 有 2 张、238 张表里有 2 张从来没进过本闸；这条洞是覆盖率读数一打印就露出来的。
+    pages = [norm(x) for x in dom]
     if len(pages) < 30:
         raise SystemExit(f"枚举到 {len(pages)} 条正文路由（<30）——口径可疑，中止")
     print(f"[枚举] 两条口径互证一致：DOM {len(dom)} / _sidebar.md {len(md)}，"
-          f"其中正文页 {len(pages)} 条（首页封面 {len(dom) - len(pages)} 条不参与本闸）")
+          f"交回采样 {len(pages)} 条路由（含首页 `#/`；它的正文压在封面下，"
+          f"由 dismiss_cover 真点揭幕之后再量）")
     return pages
 
 
@@ -232,12 +283,48 @@ def renderable_mermaid_fences(text: str) -> int:
     return count
 
 
+def md_file(path: str) -> Path:
+    """路由 → md 正文。首页路由 `#/` 归一化后是空串，它的正文在 README.md，不是 `.md`。"""
+    return DOCS / ("README.md" if path == "" else path + ".md")
+
+
 def fence_counts(paths: list[str]) -> dict[str, int]:
     """独立口径：每页 markdown 里会渲染的 mermaid 围栏数，用来证明"图真的画出来了"。"""
     out = {}
     for p in paths:
-        f = DOCS / (p + ".md")
+        f = md_file(p)
         out[p] = renderable_mermaid_fences(f.read_text()) if f.is_file() else -1
+    return out
+
+
+# 表格的**独立口径**：CommonMark/GFM 的表 = 表头行 + 紧随的分隔行（每格至少一个 -，可带对齐冒号）。
+TABLE_SEP = re.compile(r"^ {0,3}\|?[ ]*:?-+:?[ ]*(\|[ ]*:?-+:?[ ]*)*\|?[ ]*$")
+
+
+def markdown_tables(text: str) -> int:
+    """这一页会被渲染成 <table> 的表格有几张（围栏代码块内的不算，与图同一套嵌套规则）。"""
+    n, fence = 0, None
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        m = FENCE_RE.match(line)
+        if m:
+            if fence is None:
+                fence = len(m.group(2))
+            elif len(m.group(2)) >= fence and not line[m.end():].strip():
+                fence = None
+            continue
+        if fence is not None:
+            continue
+        if "|" in line and i + 1 < len(lines) and TABLE_SEP.match(lines[i + 1]):
+            n += 1
+    return n
+
+
+def table_counts(paths: list[str]) -> dict[str, int]:
+    out = {}
+    for p in paths:
+        f = md_file(p)
+        out[p] = markdown_tables(f.read_text()) if f.is_file() else -1
     return out
 
 
@@ -262,20 +349,60 @@ def settle(b: CDP) -> None:
     time.sleep(0.25)
 
 
+def coverage_summary(cov: dict) -> str:
+    """把滚动暗示判据的对象数拼成一行读数：页/个 → 需滚 页/个。
+
+    Why：这一条判据过去只打印"通过/不通过"，对象数从来没露过面——新加的六列宽表进了
+    全站清单也没有数字背书，覆盖率失明就等于判据可能一直在空跑。读数现在无条件随退出码打印。
+    """
+    if not cov:
+        return "没量到任何一页（枚举或导航已中止）"
+    parts = []
+    for w in sorted(cov):
+        seg = []
+        for cls in list(SCROLL_CLASSES) + [k for k in sorted(cov[w]) if k not in SCROLL_CLASSES]:
+            e = cov[w].get(cls, {})
+            if cls.startswith("md-"):
+                seg.append(f"{cls} {e.get('present', 0)} 张 / {len(e.get('pages', ()))} 页")
+                continue
+            seg.append(f".{cls} {len(e.get('pages', ()))} 页/{e.get('present', 0)} 个"
+                       f" → 需滚 {len(e.get('opages', ()))} 页/{e.get('objects', 0)} 个")
+        parts.append(f"{w}px " + "；".join(seg))
+    return "\n  · ".join(parts)
+
+
 def audit(base: str, pages: list[str], themes: list[str],
           shot_dir: Path | None = None, report: bool = False,
-          viewports: list[tuple[int, int, bool]] | None = None) -> list[str]:
+          viewports: list[tuple[int, int, bool]] | None = None) -> tuple[list[str], dict]:
     fails: list[str] = []
+    # 覆盖率台账：cov[宽度档][容器类别] = {"present": 枚举到的容器数, "pages": 有该类容器的页,
+    # "objects": 需要横向滚动的容器数, "opages": 其中有对象的页}。
+    # 只按**首个主题**记一次：主题不改几何，逐主题累加会把同一批容器乘上主题数，
+    # "全站有几张宽表"这个读数就失去了含义。
+    cov: dict[int, dict[str, dict]] = {}
     counts = fence_counts(pages)
+    tcounts = table_counts(pages)
     for w, h, mobile in (viewports or VIEWPORTS):
         with CDP(w, h) as b:
             b.set_viewport(w, h, mobile=mobile)
             route_list = pages if pages != ["ALL"] else routes_two_ways(b, base)
             counts = fence_counts(route_list)
+            tcounts = table_counts(route_list)
+            # 等式的左边：md 侧独立口径数出的表格数，和右边 DOM 侧一起进台账打印。
+            # 只报右边等于"量具自己说自己对"——两边都露出来，包漏一张才看得见。
+            cov.setdefault(w, {})["md-tables(独立口径)"] = {
+                "present": sum(v for v in tcounts.values() if v > 0),
+                "pages": {p for p, v in tcounts.items() if v > 0},
+                "objects": 0, "opages": set()}
             for theme in themes:
                 for path in route_list:
-                    label = f"{w}px/{theme}/{path}"
+                    disp = path or "首页(封面之下)"
+                    label = f"{w}px/{theme}/{disp}"
                     b.navigate(f"{base}/#/{quote(path)}")
+                    why = dismiss_cover(b, base, path)
+                    if why:
+                        fails.append(f"[{label}] {why}")
+                        continue
                     ok = b.wait_for(
                         "document.querySelector('.markdown-section') && "
                         "document.querySelector('.markdown-section').textContent.length > 40", 25)
@@ -285,8 +412,10 @@ def audit(base: str, pages: list[str], themes: list[str],
                         fails.append(f"[{label}] 正文未渲染，本页读数作废")
                         continue
                     d = json.loads(b.js(PROBE_JS, await_promise=True, timeout=90))
-                    # 落点自证：URL 二次转义（# → %23）会让整趟采样打在同一个坏页面上
-                    got = unquote((d["hash"] or "").lstrip("#")).strip("/")
+                    # 落点自证：URL 二次转义（# → %23）会让整趟采样打在同一个坏页面上。
+                    # 只比 `?` 之前的页面部分——揭幕那次真点会把 hash 写成 `#/?id=/`，
+                    # 锚点是那条 CTA 自己带的，不是走错了页。
+                    got = unquote((d["hash"] or "").lstrip("#")).split("?")[0].strip("/")
                     if got != path:
                         fails.append(f"[{label}] 实际落在 {d['hash']!r}——读数作废")
                         continue
@@ -336,6 +465,33 @@ def audit(base: str, pages: list[str], themes: list[str],
                             fails.append(f"[{label}] 图#{m['i']} 溢出 {m['overflows']}px 但宿主没挂号"
                                          f" is-wide——左对齐靠的是它")
 
+                    # —— 覆盖自证：md 里的管道表必须一张不少地被套上 .table-scroll
+                    # （index.html 的 afterEach 是无条件包，所以判"相等"而不是判"有没有"。
+                    #  上一轮六列宽表进书稿时，这条等式根本不存在——只验了"有暗示"，没验过
+                    #  "这一页的表全被包进滚动层"。现在等式两边都进台账，红在 `!=` 上。）
+                    n_tbl = tcounts.get(path, -1)
+                    dom_tbl = d["seen"].get("table-scroll", 0)
+                    if n_tbl < 0:
+                        pass    # 上面已经报过"找不到 .md"
+                    elif dom_tbl != n_tbl:
+                        fails.append(f"[{label}] 页内有 {n_tbl} 张 markdown 表格，"
+                                     f"DOM 里量到 {dom_tbl} 个 .table-scroll 容器"
+                                     f"——滚动层包漏了或选择器失效，本判据对这张表失明")
+
+                    if theme == themes[0]:
+                        pc = cov.setdefault(w, {})
+                        for cls, n in d["seen"].items():
+                            e = pc.setdefault(cls, {"present": 0, "pages": set(),
+                                                    "objects": 0, "opages": set()})
+                            e["present"] += n
+                            if n:
+                                e["pages"].add(path)
+                        for s in d["scrollers"]:
+                            e = pc.setdefault(s["sel"], {"present": d["seen"].get(s["sel"], 0),
+                                                         "pages": set(), "objects": 0, "opages": set()})
+                            e["objects"] += 1
+                            e["opages"].add(path)
+
                     for s in d["scrollers"]:
                         if not s["framed"]:
                             fails.append(f"[{label}] {s['sel']} 需要横向滚动 {s['overflow']}px，"
@@ -370,7 +526,7 @@ def audit(base: str, pages: list[str], themes: list[str],
                         if hit.get("veil"):
                             fails.append(f"[{label}] {s['sel']} 右缘 {s['hit'].get('tag')}"
                                          f".{s['hit'].get('cls')} 挡住了命中测试——内容点不到了")
-    return fails
+    return fails, cov
 
 
 # 每条变异 = (名字, 文件, 锚点, 替换, 期望被打红的判据关键词)
@@ -391,6 +547,11 @@ MUTATIONS = [
     ("E 宽图宿主不挂 is-wide（撑宽后仍居中）", "index.html",
      "host.classList.add('is-wide');", "host.classList.add('is-wide-noop');",
      "没挂号 is-wide"),
+    # F 打的不是渐隐层而是**包表那一层**：渲染器不再给表格套滚动容器。
+    # 这条判据的对象数靠 md/DOM 双口径等式自证，所以变异必须让等式两边差起来才有读者。
+    ("F 表格不再被 .table-scroll 包住（渲染器漏掉整类对象）", "index.html",
+     "function (t) { return '<div class=\"table-scroll\">' + t + '</div>'; }",
+     "function (t) { return t; }", "DOM 里量到"),
 ]
 
 
@@ -424,7 +585,7 @@ def run_mutations() -> int:
             apply_mutation(tmp, mut)
             base, shutdown = serve(tmp)
             try:
-                fails = audit(base, MUT_PAGES, ["light"])
+                fails, _ = audit(base, MUT_PAGES, ["light"])
             finally:
                 shutdown()
         finally:
@@ -454,7 +615,14 @@ def main() -> int:
         print("结论：" + ("每条变异都被具名捕获。" if bad == 0 else f"{bad} 条变异未被捕获。"))
         return 0 if bad == 0 else 1
 
-    pages = ["ALL"] if args.pages == "ALL" else [p.strip() for p in args.pages.split(",") if p.strip()]
+    if args.pages == "ALL":
+        pages = ["ALL"]
+    else:
+        # `--pages ""` 是首页那一条（norm 后为空串）：不能顺手把它当空参数丢掉，
+        # 但 "a,,b" 里的空洞仍要丢。
+        pages = [p.strip() for p in args.pages.split(",") if p.strip() or args.pages == ""]
+    if not pages:
+        raise SystemExit("--pages 解析出 0 条路由——判据没有对象，中止（首页写 --pages ''）")
     themes = [t.strip() for t in args.themes.split(",") if t.strip()]
     vps = parse_viewports(args.viewports) if args.viewports else VIEWPORTS
     shot = Path(args.screenshot) if args.screenshot else None
@@ -462,9 +630,11 @@ def main() -> int:
         shot.mkdir(parents=True, exist_ok=True)
     base, shutdown = serve(DOCS)
     try:
-        fails = audit(base, pages, themes, shot, args.report, vps)
+        fails, cov = audit(base, pages, themes, shot, args.report, vps)
     finally:
         shutdown()
+    print(f"[覆盖率读数] 滚动暗示判据的对象数（每档只按首个主题量一次，含未溢出的容器）：\n"
+          f"  · {coverage_summary(cov)}")
     if fails:
         grouped: dict[str, int] = {}
         for f in fails:
