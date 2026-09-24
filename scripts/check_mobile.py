@@ -30,6 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cdp import CDP, free_port  # noqa: E402
+from check_legibility import dismiss_cover, same_landing  # noqa: E402  # 揭幕那条链只写一份，五条闸共用
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
@@ -41,6 +42,10 @@ PAGES = {
     "时间线": "manuscript/ch03-案例时间线",
     "数字清单": "manuscript/ch05-数字清单",
     "部分卷首": "manuscript/part-1-认知",
+    # 首页 `#/` 走的是 README.md，但读者到达它时先看到封面——同一份正文在"揭幕后的首页"
+    # 这一条路由上从未进过本闸（"总览"量的是 `#/README`，那条不会挂封面）。
+    # 加这一页是为了让窄屏几何判据覆盖读者实际看到的那一次到达。
+    "首页正文(封面之下)": "",
 }
 SCALE_MIN = 0.95  # 判"缩成糊图"的口径 = 渲染宽 / viewBox 宽。窄屏下每张图都按自己的
                   # viewBox 定宽（index.html 的 ainseGuardDiagramWidth），所以应当是 1.00。
@@ -122,6 +127,10 @@ def audit(base: str, shot_dir: Path | None = None, report: bool = False) -> list
         b.set_viewport(W, H, mobile=True)
         for label, path in PAGES.items():
             b.navigate(f"{base}/#/{quote(path)}")
+            why = dismiss_cover(b, path)
+            if why:
+                fails.append(f"[{label}] {why}")
+                continue
             rendered = b.wait_for(
                 "document.querySelector('.markdown-section') && "
                 "document.querySelector('.markdown-section').textContent.length > 40", 25)
@@ -131,7 +140,10 @@ def audit(base: str, shot_dir: Path | None = None, report: bool = False) -> list
                 fails.append(f"[{label}] 正文未渲染，本页读数作废")
                 continue
             d = json.loads(b.js(PROBE_JS))
-            if unquote((d["hash"] or "").lstrip("#")).strip("/") != path:
+            # 落点自证：只比 `?` 之前的页面部分——揭幕那次真点会把 hash 写成 `#/?id=/`，
+            # 锚点是那条 CTA 自带的，不是走错了页。
+            got = unquote((d["hash"] or "").lstrip("#")).split("?")[0].strip("/")
+            if not same_landing(got, path):
                 fails.append(f"[{label}] 落在 {d['hash']!r}，应为 {path!r}——读数作废")
                 continue
             if shot_dir:
@@ -198,6 +210,10 @@ MUTATIONS = [
      "      var target = narrow ? Math.max(need, 1) : need;",
      "      var narrow = window.matchMedia('(min-width: 4000px)').matches;\n"
      "      var target = narrow ? Math.max(need, 1) : need;", "等比缩成糊图"),
+    # 首页进采样面（PAGES 里那条 path="" ）靠的是真点封面那条「全书架构」揭幕。
+    # 入口一改名，这一页就读不到正文——本闸必须报红而不是静默少测一页。
+    ("F 封面上的「全书架构」入口改名（首页正文无从抵达）", "_coverpage.md",
+     "[全书架构](README.md)", "[全书结构总览](README.md)", "正文无从揭幕"),
 ]
 
 

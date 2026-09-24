@@ -23,7 +23,7 @@
 
 用法：
     python3 scripts/check_palette.py                        # 全量：62 条路由 × 1280/1440/390 × 浅/深
-    python3 scripts/check_palette.py --mutate               # 变异自检：九条判据各自要能被打红
+    python3 scripts/check_palette.py --mutate               # 变异自检：P1–P10 各自要能被打红
     python3 scripts/check_palette.py --screenshot DIR       # 供人工逐项复核的截图
     python3 scripts/check_palette.py --report               # 打印对比度最低的若干对前景/底色
 
@@ -47,6 +47,7 @@ from urllib.parse import quote, unquote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cdp import CDP, free_port  # noqa: E402
+from check_legibility import dismiss_cover, same_landing  # noqa: E402  # 揭幕那条链只写一份，五条闸共用
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
@@ -568,11 +569,11 @@ def routes_two_ways(b: CDP, base: str) -> list[str]:
         raise SystemExit(f"两条枚举口径不一致（DOM {len(dom)} / _sidebar.md {len(md)}）："
                          f"只在 DOM={sorted(dom_u - md_u)[:4]} 只在 md={sorted(md_u - dom_u)[:4]}"
                          f"——中止，先修口径")
-    pages = [p for p in (norm(x) for x in dom) if p]
+    pages = [norm(x) for x in dom]
     if len(pages) < 30:
         raise SystemExit(f"枚举到 {len(pages)} 条正文路由（<30）——口径可疑，中止")
     print(f"[枚举] 两条口径互证一致：DOM {len(dom)} / _sidebar.md {len(md)}，"
-          f"其中正文页 {len(pages)} 条（首页封面 {len(dom) - len(pages)} 条无正文可判，不参与）")
+          f"交回采样 {len(pages)} 条（含首页 `#/`；正文压在封面下，由 dismiss_cover 真点揭幕之后再量）")
     return pages
 
 
@@ -623,8 +624,13 @@ def audit(base: str, pages: list[str], themes: list[str],
             light_tokens: dict[str, dict] = {}
             for theme in themes:
                 for path in route_list:
-                    label = f"{w}px/{theme}/{path}"
+                    disp = path or "首页(封面之下)"
+                    label = f"{w}px/{theme}/{disp}"
                     b.navigate(f"{base}/#/{quote(path)}")
+                    why = dismiss_cover(b, path)
+                    if why:
+                        fails.append(f"[{label}] {why}")
+                        continue
                     ok = b.wait_for(
                         "document.querySelector('.markdown-section') && "
                         "document.querySelector('.markdown-section').textContent.length > 40", 25)
@@ -634,8 +640,9 @@ def audit(base: str, pages: list[str], themes: list[str],
                         fails.append(f"[{label}] 正文未渲染，本页读数作废")
                         continue
                     d = read_page(b)
-                    got = unquote((d["hash"] or "").lstrip("#")).strip("/")
-                    if got != path:
+                    # 落点自证只比 `?` 之前的页面部分：揭幕那次真点会把 hash 写成 `#/?id=/`。
+                    got = unquote((d["hash"] or "").lstrip("#")).split("?")[0].strip("/")
+                    if not same_landing(got, path):
                         fails.append(f"[{label}] 实际落在 {d['hash']!r}——读数作废")
                         continue
 
@@ -758,7 +765,7 @@ def audit(base: str, pages: list[str], themes: list[str],
 
 # ============================== 变异自检 ==============================
 
-MUT_PAGES = ["README", "manuscript/ch09-第4章-AI原生工程栈"]
+MUT_PAGES = ["", "README", "manuscript/ch09-第4章-AI原生工程栈"]
 # 390 档必须一起跑：窄屏顶栏第一行的书名只在 @media (max-width:768px) 里被 ::before
 # 生成出来。只在 1280 跑变异，等于「伪元素判据」这一类对象从来没有过一次 RED——
 # 绿读数证明不了它会报红。
@@ -810,6 +817,11 @@ MUTATIONS = [
     ("P9 窄屏顶栏书名换成发丝线色（::before 生成的字）", "theme.css",
      "    letter-spacing: .12em;\n    color: var(--c-text-2);",
      "    letter-spacing: .12em;\n    color: var(--c-border);", "pseudo::before"),
+    # 首页从 2026-09-25 起进采样面，靠的是"真点封面那条「全书架构」揭幕"。
+    # 这条链一旦哑掉（读者到不了正文），本闸必须报红而不是静默少测一页——
+    # 所以给"首页在场"这个新事实配一个会因它而拒绝执行的读者。
+    ("P10 封面上那条「全书架构」入口改名（首页正文无从抵达）", "_coverpage.md",
+     "[全书架构](README.md)", "[全书结构总览](README.md)", "正文无从揭幕"),
 ]
 
 

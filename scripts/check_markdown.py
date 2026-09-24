@@ -13,7 +13,7 @@ Why：Docsify 用 marked 解析，两类破损都不报错、不产生死链，�
 
 用法：python3 scripts/check_markdown.py            # 校验
       python3 scripts/check_markdown.py --count    # 只报覆盖量
-      python3 scripts/check_markdown.py --selftest # 标题闸 4 条 + 空节闸 4 条已知答案自检
+      python3 scripts/check_markdown.py --selftest # 标题闸 6 条 + 空节闸 4 条已知答案自检
 """
 import re
 import sys
@@ -154,9 +154,20 @@ NUM_PREFIX = re.compile(
 
 
 def heading_titles(text):
-    """取正文所有标题，剥掉编号（J.6→J.9 这种重编号不该被判成丢失）。"""
+    """取正文所有标题，剥掉编号（J.6→J.9 这种重编号不该被判成丢失）。
+
+    口径与空节闸共用 `heading_kinds`：**围栏里的行不是标题**。这条不是顺手做的优雅，
+    是 2026-09-25 的一次假红逼出来的——`FIGURE_LIST.md` 的 ```bash 命令块里有五行
+    `# 口径边界……`  shell 注释，旧口径把它们记成小节，于是改一次注释文字就报五条
+    "HEAD 里的小节查无此人"。判据把"编辑事故"和"我在改代码示例"混成同一类，
+    报红就失去了指认能力；而空节闸早就用围栏感知口径了，同一文件里两把尺子不一样。
+    """
+    lines = text.splitlines()
+    kinds = heading_kinds(lines)
     out = []
-    for line in text.splitlines():
+    for line, kind in zip(lines, kinds):
+        if kind != "head":
+            continue
         m = HEAD_MARK.match(line)
         if not m:
             continue
@@ -202,24 +213,31 @@ def heading_problems():
 
 
 def heading_selftest():
-    """已知答案 fixture：删除必须报、改名必须不报、原样必须 0。"""
+    """已知答案 fixture：删除必须报、改名必须不报、原样必须 0、围栏里的 `#` 不是标题。"""
     base = "# 标题\n\n## 3.3 AI 使用规模（治理前 vs 治理后）\n\n## J.9 与治理章的映射\n"
+    fenced = ("## 复核命令\n\n```bash\npython3 x.py\n# 口径边界：这是 shell 注释不是小节\n```\n")
     cases = [
-        ("删掉一节 → 必须报 1 条", base.replace("## 3.3 AI 使用规模（治理前 vs 治理后）\n\n", ""), 1),
-        ("改标题名 → 必须不报", base.replace("与治理章的映射", "与治理章的映射与上下游"), 0),
-        ("原样不动 → 必须 0 条", base, 0),
-        ("重编号（J.9→J.11）→ 必须不报", base.replace("## J.9", "## J.11"), 0),
+        ("删掉一节 → 必须报 1 条", base, base.replace("## 3.3 AI 使用规模（治理前 vs 治理后）\n\n", ""), 1),
+        ("改标题名 → 必须不报", base, base.replace("与治理章的映射", "与治理章的映射与上下游"), 0),
+        ("原样不动 → 必须 0 条", base, base, 0),
+        ("重编号（J.9→J.11）→ 必须不报", base, base.replace("## J.9", "## J.11"), 0),
+        # 围栏感知两条各自带基线：改围栏里的注释必须不报，同一段里围栏外的小节被吃掉必须报。
+        # 对照放在**同一份文本**里做，否则"围栏里不报"可能只是因为整段都没被读。
+        ("围栏里的 shell 注释改了措辞 → 必须不报", fenced,
+         fenced.replace("# 口径边界：这是 shell 注释不是小节", "# 口径边界：换成五行新说明"), 0),
+        ("围栏外的真小节被吃掉 → 必须报 1 条", fenced,
+         fenced.replace("## 复核命令\n\n", ""), 1),
     ]
     bad = 0
-    for name, cur, want in cases:
-        got = len(lost_headings(base, cur))
+    for name, b, cur, want in cases:
+        got = len(lost_headings(b, cur))
         flag = "✔" if got == want else "✘"
         if got != want:
             bad += 1
         print(f"  [{flag}] {name}：报 {got} 条（应为 {want}）")
     if bad:
         raise SystemExit(f"标题闸的自检 {bad} 条不符——判据本身不可信")
-    print("  自检结论：删除会报、改名与重编号不报；判据的排除集没有被自己放宽。")
+    print("  自检结论：删除会报、改名与重编号不报、围栏里的 `#` 不当小节；判据的排除集没有被自己放宽。")
     return 0
 
 

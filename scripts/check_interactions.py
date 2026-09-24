@@ -38,6 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cdp import CDP, free_port, safe_text  # noqa: E402
+from check_legibility import dismiss_cover  # noqa: E402  # 揭幕那条链只写一份，五条闸共用
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
@@ -262,7 +263,7 @@ class Suite:
         self.widths = widths
         self.chain = chain
         self.failures: list[str] = []
-        self.counters = {"routes": 0, "hitpoints": 0, "controls": 0, "clicks": 0,
+        self.counters = {"routes": 0, "cover_bodies": 0, "hitpoints": 0, "controls": 0, "clicks": 0,
                          "veil_nodes": 0, "veil_points": 0, "veil_clicks": 0, "veil_on": 0}
         self.console: list[str] = []
         # 每档视口最多真点两处暗示层：目标是"证明这层不吃点击"，不是遍历 90 个容器
@@ -285,7 +286,12 @@ class Suite:
                 clicks0, points0 = self.counters["veil_clicks"], self.counters["veil_points"]
                 for route in self.routes:
                     self.probe_route(b, route, w, h)
-                print(f"  · 命中测试 {w}x{h}：{self.counters['routes']} 页 / "
+                    if route.lstrip("#").strip("/") == "":
+                        # 首页的正文压在封面下：封面那一遍判的是遮罩，正文这一遍才判遮挡/控件/暗示层。
+                        self.probe_route(b, route, w, h, dismissed=True)
+                        self.counters["cover_bodies"] += 1
+                print(f"  · 命中测试 {w}x{h}：{self.counters['routes']} 页"
+                      f"（其中封面揭幕后的正文 {self.counters['cover_bodies']} 遍）/ "
                       f"{self.counters['controls']} 个控件，累计失败 {len(self.failures)}", flush=True)
                 if self.chain:
                     self.click_chain(b, w, h)
@@ -319,11 +325,28 @@ class Suite:
             self.fail(f"[{w}x{h}] {route}：正文在 20s 内没有渲染出来（卡死）")
         return ok
 
-    def probe_route(self, b: CDP, route: str, w: int, h: int) -> dict | None:
+    def probe_route(self, b: CDP, route: str, w: int, h: int, dismissed: bool = False) -> dict | None:
+        """逐路由做命中测试 + 控件可达性判定。
+
+        dismissed=True 只用于首页：那条路由的正文压在封面下，必须**真点**封面入口揭幕之后
+        再按正文页判（is_cover 翻成 False，封面那两条判据让位给正文判据）。
+        """
         is_cover = route.lstrip("#") in ("", "/")
+        disp = f"{route}（揭幕后的正文）" if dismissed else route
         if is_cover:
             b.js("location.hash = '#/'")
             b.wait_for("document.querySelector('section.cover.show')", 20)
+            if dismissed:
+                why = dismiss_cover(b, route)
+                if why:
+                    self.fail(f"[{w}x{h}] {disp}：{why}")
+                    return None
+                if not b.wait_for(
+                        "document.querySelector('.markdown-section') "
+                        "&& document.querySelector('.markdown-section').innerText.trim().length > 50", 20):
+                    self.fail(f"[{w}x{h}] {disp}：揭幕之后正文没渲染出来——本页读数作废")
+                    return None
+                is_cover = False
         elif not self.goto(b, route, w, h):
             return None
         rep = json.loads(b.js(PROBE_JS % (json.dumps(SAMPLE_POINTS), json.dumps(CONTROL_GROUPS))))
@@ -335,12 +358,12 @@ class Suite:
                 continue
             if hit["underCover"]:
                 self.fail(
-                    f"[{w}x{h}] {route}：坐标 {hit['at']} 被封面接走（{hit['hit']}）——"
+                    f"[{w}x{h}] {disp}：坐标 {hit['at']} 被封面接走（{hit['hit']}）——"
                     f"cover.show={hit['coverShown']}，整页不可点击"
                 )
         if is_cover and (on_cover < 4 or not rep["hits"][0]["coverShown"]):
             self.fail(
-                f"[{w}x{h}] {route}：封面应当接住整屏，实测 5 点只有 {on_cover} 点落在封面上"
+                f"[{w}x{h}] {disp}：封面应当接住整屏，实测 5 点只有 {on_cover} 点落在封面上"
             )
         by_group: dict[str, list] = {}
         for c in rep["controls"]:
@@ -349,39 +372,39 @@ class Suite:
                 self.counters["controls"] += c["tested"]
                 continue
             self.fail(
-                f"[{w}x{h}] {route}：{c['group']}「{c['targetText']}」中心 {c['at']} "
+                f"[{w}x{h}] {disp}：{c['group']}「{c['targetText']}」中心 {c['at']} "
                 f"(rect {c['targetRect']}) 点不到，被「{c['blockedText']}」(rect {c['blockedRect']}) "
                 f"{c['blockedBy']} 挡住"
             )
         for name, summ in by_group.items():
             if summ["tested"] == 0 and summ["present"] > 0 and self.must_be_hittable(name, w, is_cover):
                 self.fail(
-                    f"[{w}x{h}] {route}：{name} 存在 {summ['present']} 个，但 0 个通过命中测试"
+                    f"[{w}x{h}] {disp}：{name} 存在 {summ['present']} 个，但 0 个通过命中测试"
                     f"（不在布局 {summ['hidden']}、在视口外 {summ['offscreen']}）"
                     f"——该档宽度下这一组必须可点"
                 )
         if not is_cover and rep["overflow"]:
             self.fail(
-                f"[{w}x{h}] {route}：侧边栏有 {len(rep['overflow'])} 条标题被裁切："
+                f"[{w}x{h}] {disp}：侧边栏有 {len(rep['overflow'])} 条标题被裁切："
                 + "、".join(rep["overflow"][:4])
             )
         # —— 滚动暗示层：命中测试逐点判"穿不穿得透"，并把可点候选交给真实点击
         self.counters["veil_nodes"] += rep["veilEls"]
         if rep["needScroll"] and not rep["veilEls"]:
             self.fail(
-                f"[{w}x{h}] {route}：{rep['needScroll']} 个容器要横向滚动，页内却有 0 个"
+                f"[{w}x{h}] {disp}：{rep['needScroll']} 个容器要横向滚动，页内却有 0 个"
                 f" .scroll-veil 节点——读者无从知道右边还有内容"
             )
         for v in rep["veils"]:
             self.counters["veil_points"] += 1
             if v["eats"]:
                 self.fail(
-                    f"[{w}x{h}] {route}：{v['side']} 侧暗示层在 {v['at']} 挡住了命中测试"
+                    f"[{w}x{h}] {disp}：{v['side']} 侧暗示层在 {v['at']} 挡住了命中测试"
                     f"（overflow={v['overflow']}px，接住点击的是 {v['hit']}）——它吃掉点击"
                 )
             if v["pe"] != "none":
                 self.fail(
-                    f"[{w}x{h}] {route}：{v['side']} 侧暗示层 pointer-events={v['pe']}"
+                    f"[{w}x{h}] {disp}：{v['side']} 侧暗示层 pointer-events={v['pe']}"
                     f"——覆盖在表格与图上的层必须只看不拦"
                 )
             if v["on"]:
@@ -389,7 +412,9 @@ class Suite:
                 # 候选只按「该侧此刻该显示」选，不按坐标在不在视口内选：命中测试跑之前
                 # 控件那一段会 settle() 滚侧边栏，正文里暗示层的 y 早就不是点的时候的 y 了。
                 # 真点时重新定位＋滚到跟前（见 veil_click_through），坐标现量。
-                if len(self.veil_targets) < self.VEIL_CLICK_MAX:
+                # 揭幕后的首页这一遍不登记真点候选：veil_click_through 用 goto() 重到达，
+                # 那条路会把封面再挂一次，候选坐标就落到封面上了。暗示层的真点仍由 61 页正文覆盖。
+                if not dismissed and len(self.veil_targets) < self.VEIL_CLICK_MAX:
                     self.veil_targets.append((route, v["fi"], v["side"], v["overflow"]))
         return rep
 
@@ -1016,27 +1041,42 @@ MUTATIONS = [
         ),
         ("侧暗示层在", "侧暗示层 pointer-events", "暗示层吃掉了读者的点击"),
     ),
+    (
+        # 首页正文在采样面里靠的是"真点封面那条「全书架构」揭幕"（probe_route 的 dismissed 遍）。
+        # 入口一改名，那一遍就该作废并报红——否则本闸会以为首页正文量过了。
+        "M6 封面上的「全书架构」入口改名（首页正文无从抵达）",
+        lambda files: files["_coverpage.md"].__setitem__(
+            "[全书架构](README.md)", "[全书结构总览](README.md)"
+        ),
+        ("正文无从揭幕",),
+    ),
 ]
 
 
 def mutate(name: str, text: str, files: dict) -> str:
-    """把 files 里的补丁写回文本：index.html 用替换，theme.css 用追加。"""
-    if name == "index.html":
-        for old, new in files["index.html"].items():
-            text = text.replace(old, new)
-        return text
-    return text + files["theme.css"].get("__tail__", "")
+    """把 files 里的补丁写回文本：theme.css 走尾部追加，其余文件（index.html / _coverpage.md）走替换。"""
+    if name == "theme.css":
+        return text + files["theme.css"].get("__tail__", "")
+    # 锚点唯一性在打补丁之前判：同一段文本在别处出现过时 replace 会打到另一处，
+    # 表现出来却是"变异未被捕获"的假红。第六/七/八条闸都有这条中止，本条闸补上。
+    for old, new in files.get(name, {}).items():
+        hits = text.count(old)
+        if hits != 1:
+            raise SystemExit(f"变异锚点在 {name} 里出现 {hits} 次（需要恰好 1 次）——"
+                             f"歧义锚会把变异打到别处，先消歧再跑")
+        text = text.replace(old, new, 1)
+    return text
 
 
 def run_mutations(widths, only: str | None = None) -> int:
-    src = {"theme.css": (DOCS / "theme.css").read_text(), "index.html": (DOCS / "index.html").read_text()}
+    src = {f: (DOCS / f).read_text() for f in ("theme.css", "index.html", "_coverpage.md")}
     bad = 0
     # 每条变异的耗时单独落盘：整轮跑 40 分钟时，"没跑完"和"跑完但没捕获"
     # 在日志里长得一样（都是缺一条结论）。有了耗时才能点名是哪一条慢。
     for label, apply, needles in MUTATIONS:
         if only and not label.upper().startswith(only.upper()):
             continue
-        files = {"theme.css": {}, "index.html": {}}
+        files = {"theme.css": {}, "index.html": {}, "_coverpage.md": {}}
         apply(files)
         tmp = Path(tempfile.mkdtemp(prefix="ainse-mut-"))
         t0 = time.monotonic()

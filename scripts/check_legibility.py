@@ -67,8 +67,8 @@ def parse_viewports(spec: str) -> list[tuple[int, int, bool]]:
     return out
 
 # 变异自检用代表页：必须各自包含每条判据的实物对象，否则"没对象可判"会伪装成"判据有效"。
-MUT_PAGES = ["README", "manuscript/ch03-案例时间线", "manuscript/ch05-数字清单",
-             "manuscript/ch37-案例四-守夜人科技"]
+MUT_PAGES = ["", "README", "manuscript/ch03-案例时间线", "manuscript/ch05-数字清单",
+             "manuscript/ch37-案例四-守夜人科技"]   # 首条是首页 `#/`——揭幕那条判据要有对象可打
 
 # 探针按这两类容器找横向滚动对象；缺一类就是渲染器不再产出它，要报而不是静默少判。
 SCROLL_CLASSES = ("mermaid-block", "table-scroll")
@@ -179,17 +179,18 @@ COVER_CTA_JS = r"""
 """
 
 
-def dismiss_cover(b: CDP, base: str, path: str) -> str:
+def dismiss_cover(b: CDP, path: str) -> str:
     """首页 `#/` 的正文压在封面之下：真点封面上那条「全书架构」入口把它揭幕。
 
     返回空串表示可以接着量；否则返回一句可直接拼进 fails 的原因，调用方据此**作废本页读数**，
     而不是静默跳过——封面没揭开时页面确实有 `.markdown-section` 之类的壳，量它会得到一堆假读数。
 
     为什么真点而不是 `location.hash = ...` 赋值：赋值会把"这条 CTA 到底能不能用"一并跳过，
-    而那是首页这一页上唯一的入口判据。第七、九两条闸共用这一条链（第九条是通过 import 复用的
-    第三个读者——它先因为 `routes_two_ways` 开始返回首页而报红，红得对）。
+    而那是首页这一页上唯一的入口判据。第五、六、七、八、九条闸共用这一条链（第五、六、八条
+    是 2026-09-25 为收回"全站"两个字接上的；第九条更早，它是通过 import 复用的第三个读者——
+    它先因为 `routes_two_ways` 开始返回首页而报红，红得对）。
     """
-    if path != "":
+    if path.lstrip("#").strip("/"):
         return ""
     # 先等封面自己挂出来：`section.cover` 是 _coverpage.md 到手之后才建的，
     # 一到就查会查不到入口（第一次跑就是这样报的红）。
@@ -198,8 +199,26 @@ def dismiss_cover(b: CDP, base: str, path: str) -> str:
     if not rect:
         return "封面上找不到「全书架构」入口——正文无从揭幕，本页读数作废"
     b.click(rect["x"], rect["y"])
-    b.wait_for("!document.querySelector('section.cover.show')", 15)
+    if not b.wait_for("!document.querySelector('section.cover.show')", 15):
+        return (f"真点 ({rect['x']},{rect['y']}) 之后封面仍在——读者点得动入口却进不到正文，"
+                f"本页读数作废")
     return ""
+
+
+def same_landing(got: str, want: str) -> bool:
+    """落点自证的等价判断：首页 `#/` 的正文就是 README.md，揭幕之后落在 `README` 上是同一份文档。
+
+    为什么揭幕会落在 `README` 而不是 `#/`：封面那条「全书架构」入口原本写的就是 `#/`，
+    Docsify 把 `#` 开头的 href 当成**当前页锚点**，于是 hash 变成 `#/?id=/`，
+    它的 `$resetEvents` 接着拿这个"锚"去 `document.querySelector('#/')` ——
+    直接抛 `SyntaxError: '#/' is not a valid selector`。第五条闸真点那一下把这个
+    未捕获异常抓了出来（此前没有任何一条闸点过这条链接）。入口已改成路由链接形态
+    `README.md`（`#/README` 同样会被 Docsify 当锚点、抛 `'#/readme' is not a valid selector`），
+    所以这里放行"首页 ↔ README"这一对等价，其余仍要求逐字相等。
+    """
+    if want.lstrip("#").strip("/") == "":
+        return got in ("", "README")
+    return got == want
 
 
 def routes_two_ways(cdp: CDP, base: str) -> list[str]:
@@ -399,7 +418,7 @@ def audit(base: str, pages: list[str], themes: list[str],
                     disp = path or "首页(封面之下)"
                     label = f"{w}px/{theme}/{disp}"
                     b.navigate(f"{base}/#/{quote(path)}")
-                    why = dismiss_cover(b, base, path)
+                    why = dismiss_cover(b, path)
                     if why:
                         fails.append(f"[{label}] {why}")
                         continue
@@ -416,7 +435,7 @@ def audit(base: str, pages: list[str], themes: list[str],
                     # 只比 `?` 之前的页面部分——揭幕那次真点会把 hash 写成 `#/?id=/`，
                     # 锚点是那条 CTA 自己带的，不是走错了页。
                     got = unquote((d["hash"] or "").lstrip("#")).split("?")[0].strip("/")
-                    if got != path:
+                    if not same_landing(got, path):
                         fails.append(f"[{label}] 实际落在 {d['hash']!r}——读数作废")
                         continue
                     # 主题自证：必须真点按钮，且断言 data-theme 真的翻了
@@ -552,6 +571,10 @@ MUTATIONS = [
     ("F 表格不再被 .table-scroll 包住（渲染器漏掉整类对象）", "index.html",
      "function (t) { return '<div class=\"table-scroll\">' + t + '</div>'; }",
      "function (t) { return t; }", "DOM 里量到"),
+    # G 打的不是渲染件而是**入口**：封面那条「全书架构」改名之后，读者到不了正文。
+    # 首页进采样面靠的就是这一次真点，所以这个新事实必须有会因它而拒绝执行的读者。
+    ("G 封面上的「全书架构」入口改名（首页正文无从抵达）", "_coverpage.md",
+     "[全书架构](README.md)", "[全书结构总览](README.md)", "正文无从揭幕"),
 ]
 
 

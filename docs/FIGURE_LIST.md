@@ -139,17 +139,17 @@ python3 scripts/check_mobile.py                       # 第六条：390 窄屏�
 python3 scripts/check_mobile.py --report              # 逐图输出 viewBox / 渲染宽 / 缩放（本表的图数不看缩放）
 python3 scripts/check_legibility.py                   # 第七条：有效字号地板 + 滚动暗示覆盖率（真浏览器、真点主题按钮；红绿都打印 [覆盖率读数]）
 python3 scripts/check_legibility.py --report          # 逐图输出 自然字号 / 有效字号 / 缩放
-python3 scripts/check_legibility.py --mutate          # 第七条的变异自检 A–F：每条判据各自要能报红（F＝表格不再被套进滚动层）
+python3 scripts/check_legibility.py --mutate          # 第七条的变异自检 A–G：每条判据各自要能报红（F＝表格不再被套进滚动层；G＝封面入口改名）
 python3 scripts/check_palette.py                      # 第八条：token 纪律 + 逐层 alpha 合成后的对比度（真浏览器、真点 #btn-theme）
-python3 scripts/check_palette.py --mutate             # 第八条的变异自检：七条判据各自要能报红
+python3 scripts/check_palette.py --mutate             # 第八条的变异自检 P1–P10：每条判据各自要能报红（P10＝封面入口改名，首页正文无从抵达）
 python3 scripts/check_palette.py --screenshot DIR     # 1280/1440/390 × 浅/深 逐页截图（题图与配色改动后逐项复核用这条）
 python3 scripts/plate_engine.py --check               # 题图引擎自检：板外色 / XML 解析 / 含 <text> 三种都判红
 # 浏览器端：对 107 个围栏逐个 mermaid.parse（本表刷新时 107/107 通过）
-# 口径边界（读到"全站"两个字之前先看这四行）：首页 `#/` 的正文压在封面下，各条闸对它的位置不同——
-# 第四条是静态闸不开浏览器；第五条走到这条路由但命中的是**封面**控件（那正是它的遮罩判据对象），首页正文不在命中面内；
-# 第八条枚举到首页却显式排除（打印里的"首页封面 1 条无正文可判，不参与"）；第六条按设计只量 4 个代表页。
-# 第七、九两条会真点一次「全书架构」揭幕之后再量首页正文（共用 check_legibility.dismiss_cover）：2 张图、一万四千余字、107 个文本节点。
-# 欠账登记在 DIAGNOSIS「仍待作者/第二轮」：第五、六、八条要么补同一条揭幕链，要么把这三处打印与本表"全站"的措辞收窄成"侧边栏可达的 61 页正文"。
+# 口径边界（读到"全站"两个字之前先看这五行）：首页 `#/` 的正文压在封面下，所以每条闸都要先声明自己是**量正文**还是**量封面**。
+# 第七、九、五、六、八条这五条走同一份揭幕链 `check_legibility.dismiss_cover`：真点封面上那条「全书架构」，等 `.cover.show` 消失之后再量正文
+# （点不动 / 点了不收起 ⇒ 报「正文无从揭幕，本页读数作废」而不是静默少测一页；这条拒判由变异 G / F / P10 / M6 各自把住）。
+# 第五条因此对首页跑两遍：封面态（遮罩判据的对象）＋揭幕后的正文态。第六条按设计只量代表页，首页正文自 2026-09-25 起是其中一个。
+# 第四条是静态层叠闸，不开浏览器，量的是 CSS 而不是某一页。以上覆盖面的计数由每条闸自己打印，本表不抄。
 ```
 
 ## 下一轮

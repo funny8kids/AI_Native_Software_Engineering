@@ -135,7 +135,7 @@ def audit(base: str, report: bool = False) -> tuple[list[str], dict]:
             b.navigate(f"{base}/#/{quote(path)}")
             # 首页的正文压在封面下：不揭幕就只能读到封面的字，那一读"0 个文本节点"的
             # 空覆盖判据就会报红（本闸 2026-09-25 就是被第七条的枚举改动推着撞上这条的）。
-            why = dismiss_cover(b, base, path)
+            why = dismiss_cover(b, path)
             if why:
                 fails.append(f"[{path or '首页'}] {why}")
                 continue

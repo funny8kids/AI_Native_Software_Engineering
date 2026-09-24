@@ -432,20 +432,6 @@
             setTimeout(rerenderHidden, 60);
           });
 
-          // 封面里指向首页锚点的链接（站名 / 全书架构）不会触发路由变化，
-          // Docsify 也就不收起封面——这里手动收起，随后观察者会补渲染图形
-          document.addEventListener('click', function (ev) {
-            var a = ev.target && ev.target.closest ? ev.target.closest('.cover a') : null;
-            if (!a) return;
-            var href = a.getAttribute('href') || '';
-            if (/^#?\/(\?|$)/.test(href)) {
-              setTimeout(function () {
-                var c = document.querySelector('.cover.show');
-                if (c) c.classList.remove('show');
-              }, 80);
-            }
-          }, true);
-
           hook.doneEach(function () {
             if (typeof mermaid === 'undefined') return;
             ainseInitMermaid(ainseGetTheme() === 'dark');

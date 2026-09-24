@@ -10,7 +10,7 @@
 
 [开始阅读](manuscript/README.md)
 [阅读指南](guide.md)
-[全书架构](#/)
+[全书架构](README.md)
 
 ---
 
