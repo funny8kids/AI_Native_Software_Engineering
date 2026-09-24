@@ -37,7 +37,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cdp import CDP, free_port  # noqa: E402
+from cdp import CDP, free_port, safe_text  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
@@ -507,19 +507,33 @@ class Suite:
         return json.dumps(rep, ensure_ascii=False)
 
     def anchor_box(self, b: CDP, selector: str) -> list | None:
-        """等元素真的有可点尺寸、且落在视口内，再返回它的中心坐标。
+        """等元素真的有可点尺寸、且落在**它自己那层滚动框的可见口**里，再返回中心坐标。
 
-        两件事都必须等：Docsify 换页时节点先存在、后布局，量早了拿到 0x0；
-        而"有尺寸"不等于"看得见"——侧边栏里的第 40 条链接有尺寸但在视口外，
+        三件事都必须等：Docsify 换页时节点先存在、后布局，量早了拿到 0x0；
+        "有尺寸"不等于"看得见"——侧栏里的第 40 条链接有尺寸但在视口外，
         直接点它的坐标就是点空白（实测报成 "中心 (150,-1485) 落在视口外"）。
         滚动一律 behavior:'instant'：theme.css 开了 smooth，动画中的矩形不可信。
+
+        第二层（2026-09-24 补）：**视口内有像素不等于点得到**。getBoundingClientRect
+        不受 overflow 裁剪影响，所以一条被 .sidebar（fixed，top=60，overflow-y:auto）
+        卷到裁剪边界之上的链接，照样能报出 top=16 这种"在视口内"的矩形；
+        而 elementFromPoint(150,31) 接到的是压在上面的 fixed 顶栏（z=200）。
+        判据必须按被判定对象自己的分辨率来——可点区的界是**滚动口的界**，不是屏幕的界。
         """
         w, h = b.width, b.height
         sel = json.dumps(selector)
         pred = (
             f"(function(){{var e=document.querySelector({sel});if(!e)return false;"
-            f"function ok(r){{return r.width>2&&r.height>2&&r.top>=0&&r.bottom<={h}"
-            f"&&r.left>=0&&r.right<={w};}}"
+            f"function clipBox(n){{var bx={{t:0,l:0,r:innerWidth,b:innerHeight}};"
+            f"while(n&&n!==document.body){{var c=getComputedStyle(n);"
+            f"if(/(auto|scroll|hidden|clip)/.test(c.overflowY)||/(auto|scroll|hidden|clip)/.test(c.overflowX)){{"
+            f"var q=n.getBoundingClientRect();"
+            f"if(q.width>0&&q.height>0){{bx.t=Math.max(bx.t,q.top);bx.l=Math.max(bx.l,q.left);"
+            f"bx.r=Math.min(bx.r,q.right);bx.b=Math.min(bx.b,q.bottom);}}}}n=n.parentElement;}}return bx;}}"
+            f"function ok(r){{var cb=clipBox(e);"
+            f"return r.width>2&&r.height>2&&r.top>=cb.t-1&&r.bottom<=cb.b+1"
+            f"&&r.left>=cb.l-1&&r.right<=cb.r+1&&r.left>=0&&r.top>=0"
+            f"&&r.right<={w}&&r.bottom<={h};}}"
             f"var r=e.getBoundingClientRect();"
             f"if(!ok(r)){{e.scrollIntoView({{block:'center',behavior:'instant'}});"
             f"r=e.getBoundingClientRect();}}return ok(r);}})()"
@@ -644,6 +658,18 @@ class Suite:
         attr = attr or self.MARK_ATTR
         raw = b.js(
             f"""(function () {{
+              // clip：JS 的 slice 按 UTF-16 码元切，切在 emoji 的代理对中间就送回一个
+              // 孤立代理位。2026-09-24 实测的现场：挡路元素是顶栏，它的 innerText 是
+              // 「主页\\n📖 阅读指南\\n📚 全书总览\\n🗺 四案例时间线\\n🔎 搜索」（34 个码元），
+              // 而这里切 20 个，末位正好是 🔎 的前半 0xd83d ——守卫在打印自己那条唯一
+              // 真失败时崩了（UnicodeEncodeError），退出码 1 的理由还是错的。
+              // 判据交不出去等于这一轮白跑，所以两端都要成对地切。
+              function clip(s, k) {{
+                s = (s == null ? '' : String(s)).trim().slice(0, k);
+                var c = s.charCodeAt(s.length - 1);
+                if (c >= 0xD800 && c <= 0xDBFF) s = s.slice(0, -1) + '…';
+                return s;
+              }}
               var el = document.querySelector('[{attr}]');
               if (!el) return JSON.stringify({{ready: false, why: '节点已被侧边栏重画掉'}});
               if (!document.contains(el)) return JSON.stringify({{ready: false, why: '节点已脱离文档'}});
@@ -661,14 +687,33 @@ class Suite:
               // 因为事件的捕获路径止于命中节点，目标 <a> 上的处理器根本不会触发
               // （pointer-events:none 遮在链接上正是这种情形，必须报出来）。
               if (!(top === el || el.contains(top))) {{
+                var tr = top.getBoundingClientRect();
+                var tcs = getComputedStyle(top);
+                // 现场带上祖先链：一个 fixed 侧栏里的链接量到 y<顶栏高度，只有两种可能
+                // ——祖先的 position/transform 改变了包含块，或者这一刻根本不是那套布局。
+                // 不记这条链，下一轮还是要靠猜。（2026-09-24 的 ch10 就是这个状态）
+                var anc = [], an = el;
+                for (var k = 0; an && k < 5; k++) {{
+                  var ar = an.getBoundingClientRect(), ac = getComputedStyle(an);
+                  anc.push(an.tagName.toLowerCase() + (an.className && typeof an.className === 'string'
+                    ? '.' + an.className.trim().split(/\\s+/)[0] : '')
+                    + '@' + ac.position + '[' + [ar.left, ar.top, ar.width, ar.height].map(Math.round).join(',') + ']'
+                    + (ac.transform === 'none' ? '' : ' tf=' + ac.transform.slice(0, 24)));
+                  an = an.parentElement;
+                }}
                 return JSON.stringify({{ready: false, blocked: true, x: x, y: y,
-                  href: el.getAttribute('href') || '', text: (el.innerText || '').trim().slice(0, 24),
-                  why: '该点被「' + (top.innerText || top.tagName).trim().slice(0, 20)
-                  + '」(' + top.tagName.toLowerCase() + (top.className && typeof top.className === 'string'
+                  href: el.getAttribute('href') || '', text: clip(el.innerText, 24),
+                  targetRect: [r.left, r.top, r.width, r.height].map(Math.round),
+                  blockerRect: [tr.left, tr.top, tr.width, tr.height].map(Math.round),
+                  blockerBox: tcs.position + ' z=' + tcs.zIndex,
+                  ancestors: anc,
+                  view: [innerWidth, innerHeight, Math.round(scrollY)],
+                  why: '该点被「' + clip(top.innerText || top.tagName, 20) + '」(' + top.tagName.toLowerCase()
+                  + (top.className && typeof top.className === 'string'
                   ? '.' + top.className.split(' ')[0] : '') + ') 挡在前面'}});
               }}
               return JSON.stringify({{ready: true, x: x, y: y, href: el.getAttribute('href') || '',
-                                      text: (el.innerText || '').trim().slice(0, 24)}});
+                                      text: clip(el.innerText, 24)}});
             }})()"""
         )
         return json.loads(raw) if raw else None
@@ -828,8 +873,14 @@ class Suite:
                     continue
                 ready = self.marked_ready(b, "data-ainse-walk") or {}
                 if not ready.get("ready"):
+                    # 现场全带上：anchor_box 与 marked_ready 是两次 JS 往返，
+                    # 只看一句「被挡在前面」分不出真遮挡与换页期间的坐标漂移。
                     self.fail(f"点击遍历：{href} 的入口虽在布局里，但这一点被别的东西吃掉——"
-                              f"不点（避免把点到邻居当成到站）：{ready.get('why', '无读数')}")
+                              f"不点（避免把点到邻居当成到站）：{ready.get('why', '无读数')}｜"
+                              f"取标={box and [round(box[0]), round(box[1])]} 复核点=({ready.get('x')},{ready.get('y')}) "
+                              f"目标矩形={ready.get('targetRect')} 挡路矩形={ready.get('blockerRect')} "
+                              f"挡路定位={ready.get('blockerBox')} 视口/滚动={ready.get('view')} "
+                              f"祖先链={ready.get('ancestors')}")
                     continue
                 if b.js("!!document.querySelector('section.cover.show')"):
                     self.fail(f"点击遍历：走到 {href} 时封面又盖住页面，中止以避免连锁假失败")
@@ -880,15 +931,15 @@ class Suite:
                 # 必须把异常自身的 description 和出处一起落进失败条目。
                 exc = d.get("exception") or {}
                 where = f"{d.get('url') or ''}:{d.get('lineNumber')}:{d.get('columnNumber')}"
-                detail = (exc.get("description") or exc.get("value") or d.get("text") or "")[:400]
-                msg = f"未捕获异常：{d.get('text')} @ {where} —— {detail.strip()}"
+                detail = safe_text(exc.get("description") or exc.get("value") or d.get("text") or "", 400)
+                msg = f"未捕获异常：{safe_text(d.get('text'))} @ {where} —— {detail.strip()}"
             elif m == "Log.entryAdded":
                 e = p.get("entry", {})
                 if e.get("level") == "error":
-                    msg = f"控制台 error：{e.get('text','')[:180]}"
+                    msg = f"控制台 error：{safe_text(e.get('text', ''), 180)}"
             elif m == "Runtime.consoleAPICalled" and p.get("type") in ("error", "assert"):
-                args = ",".join(str(a.get("value", a.get("description", "")))[:80] for a in p.get("args", []))
-                msg = f"console.error：{args[:180]}"
+                args = ",".join(safe_text(a.get("value", a.get("description", "")), 80) for a in p.get("args", []))
+                msg = f"console.error：{safe_text(args, 180)}"
             if msg:
                 self.console.append(f"[{context}] {msg}")
 
@@ -1026,10 +1077,10 @@ def run_mutations(widths, only: str | None = None) -> int:
                 n = caught[0]
                 print(f"  [变异 {label}] 耗时 {dt:.0f}s -> 报红 {len(failures)} 条，"
                       f"命中机制判据「{n}」{len(hits[n])} 条，子进程退出码复核 rc={rc}，"
-                      f"示例：{hits[n][0][:150]}", flush=True)
+                      f"示例：{safe_text(hits[n][0], 150)}", flush=True)
             elif failures:
                 bad += 1
-                print(f"  [变异 {label}] 耗时 {dt:.0f}s -> 只报了无关失败（示例 {failures[0][:150]}），"
+                print(f"  [变异 {label}] 耗时 {dt:.0f}s -> 只报了无关失败（示例 {safe_text(failures[0], 150)}），"
                       f"未命中机制判据 {list(needles)}——该变异未被本守卫按机制捕获", flush=True)
             else:
                 bad += 1
@@ -1105,7 +1156,7 @@ def main() -> int:
     if failures:
         print(f"\n交互闸失败 {len(failures)} 条：")
         for f in failures[:60]:
-            print("  ✗ " + f)
+            print("  ✗ " + safe_text(f))
         if len(failures) > 60:
             print(f"  …另有 {len(failures) - 60} 条")
         return 1

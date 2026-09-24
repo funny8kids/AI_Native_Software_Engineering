@@ -19,6 +19,8 @@
 | P-23-* | 提示词归档与复用 | 版本与回归 |
 | P-24-* | 评审与幻觉 | 雷达不可当法官 |
 
+找不到该用哪条提示词时，从 图 A-1 左端入口进图：菱形按失灵层次分出七条边，每条通向一个前缀族（「改动会不会破坏别人」通向 P-9/P-27 那一行），七个分支最终汇到右端同一格——回到上方速查表，取对应行的前缀条目；失灵落不进任何一条边，说明这一类约束还没入库。
+
 ```mermaid
 flowchart LR
   FAIL[遇到一次失灵<br/>不知用什么约束 AI] --> Q1{失灵在哪一层？}
@@ -36,8 +38,8 @@ flowchart LR
   F5 --> LIB
   F6 --> LIB
   F7 --> LIB
-  style FAIL fill:#fef2f2,stroke:#dc2626,color:#1a1d23
-  style LIB fill:#ecfdf5,stroke:#059669,color:#1a1d23
+  style FAIL fill:#f0dfd9,stroke:#a03b31,color:#1e1c19
+  style LIB fill:#e2ebdf,stroke:#3e7247,color:#1e1c19
 ```
 
 **图 A-1｜按失灵模式反查提示词** — 库不是按章号翻，是按「这次 AI 在哪失灵的」反查；组织接管从选对约束开始。
@@ -63,6 +65,8 @@ ai_response_summary: <AI 回复摘要>   # 待填充
 outcome:      <最终结果>             # 待填充
 status:       skeleton | used | retired
 ```
+
+一条提示词算不算进库，只认 图 A-2 上 skeleton→used 这一条边：真实或自洽场景跑过、`ai_response_summary` 与 `outcome` 两格回填完毕，才算资产；used→retired 的退场条件是「被更好版本替代」或「该约束已门禁化」，退场条目的编号照旧留着，供正文按 id 回溯。
 
 ```mermaid
 stateDiagram-v2

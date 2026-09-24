@@ -1,46 +1,99 @@
 /* ================================================================
-   《AI 原生软件工程》— 浅色主题
+   《AI 原生软件工程》— 浅色主题（印本双层）
    100% 自托管，零外部 CDN 依赖
-   设计：GitBook / Notion / Linear 浅色文档站风格
-   核心理念：内容为王——纯白背景、高对比文字、充足留白
+   设计：技术专册的纸与桌——桌面（chrome）暖灰、书叶（阅读栏）奶白，
+        强调色只留一个「铜绿」（青铜氧化后的绿，工程器物的颜色），
+        朱色只出现在语义警示里，不做装饰。
+   核心理念：内容为王——长文连续读几十页不累，靠的是纸的暖度与墨的对比，
+        不是靠颜色数量。
    ================================================================ */
 
-/* ============================== 变量 ============================== */
+/* ============================== 变量 ==============================
+   颜色的唯一出处就是这里两个块（:root 与 html[data-theme='dark']）。
+   规则里出现字面量色值 = 第八条守卫 check_palette.py 报红，例外只有三类：
+   mask-image 的黑白遮罩、@media print 的强制黑白、以及代码高亮（prism）的调色板。 */
 :root {
-  /* Background */
-  --c-bg:          #ffffff;
-  --c-bg-soft:     #f7f8fa;
-  --c-bg-sidebar:  #fbfbfd;
-  --c-bg-elevated: #f0f2f5;
-  --c-bg-hover:    #eef1f6;
-  --c-bg-code:     #f6f8fa;
+  /* Surfaces — 桌面比书叶深一档，阅读栏因此像一张压在桌上的纸 */
+  --c-desk:        #efeae0;   /* 桌面：侧栏与正文栏之外的余白 */
+  --c-bg:          #fbf8f2;   /* 书叶：阅读栏本身 */
+  --c-bg-soft:     #f5f1e7;   /* 卡片底（图、提示框） */
+  --c-bg-sidebar:  #f3eee4;
+  --c-bg-elevated: #eae4d6;
+  --c-bg-hover:    #e6dfcf;
+  --c-bg-code:     #f4f0e5;
 
-  /* Text */
-  --c-text:       #1a1d23;
-  --c-text-2:     #3d4148;
-  --c-text-3:     #6b7280;
-  --c-text-dim:   #9ca3af;
+  /* Text — 墨（带一点暖底，不写死纯黑） */
+  --c-text:       #1e1c19;
+  --c-text-2:     #45413a;
+  --c-text-3:     #6e675c;
+  --c-text-dim:   #6f6759;   /* 11–12px 小字要过 4.5:1，实测 4.8:1（第八条守卫） */
 
   /* Borders */
-  --c-border:       #e5e7eb;
-  --c-border-light: #f0f0f0;
-  --c-border-strong:#d1d5db;
+  --c-border:       #e2dacc;
+  --c-border-light: #ede7db;
+  --c-border-strong:#c9bfa9;
 
-  /* Accent — Indigo: professional, content-forward */
-  --c-accent:        #4f46e5;
-  --c-accent-hover:  #4338ca;
-  --c-accent-light:  #818cf8;
-  --c-accent-soft:   rgba(79,70,229,.08);
-  --c-accent-bg:     rgba(79,70,229,.05);
+  /* Accent — 铜绿：链接、当前条目、图号、焦点环，全站只有它 */
+  --c-accent:        #2f6154;
+  --c-accent-hover:  #234a40;
+  --c-accent-light:  #6f9a8e;
+  --c-accent-soft:   rgba(47,97,84,.10);
+  --c-accent-bg:     rgba(47,97,84,.06);
 
-  /* Semantic */
-  --c-blue:   #2563eb;
-  --c-cyan:   #0891b2;
-  --c-green:  #059669;
-  --c-orange: #ea580c;
-  --c-red:    #dc2626;
-  --c-purple: #7c3aed;
-  --c-pink:   #db2777;
+  /* 图内填充：mermaid 的 themeVariables 从这里取，不再在 index.html 里另写一套色值 */
+  /* 图版（plate）——全书 107 张 mermaid 的颜色只有这一个出处，且**深档不覆盖**：
+     图是贴在纸页上的一张彩版，浅档深档同一张纸。为什么不让图跟着主题翻：
+     mermaid 的 `style X fill:…` 不认 var()（实测：写 var() 的那条 style 会让整张图
+     渲染失败、节点直接消失），而正文里 160 条 style 行各自带着字面量色值。
+     所以图版色走「固定彩版」路线，由第八条守卫 check_palette.py 逐条比对：
+     markdown 里出现的每一个 fill/stroke/color 字面量都必须等于本组令牌的值。 */
+  --c-plate:        #f5f1e7;   /* 图版卡底 */
+  --c-plate-edge:   #e2dacc;   /* 图版卡边 */
+  --c-plate-ink:    #1e1c19;   /* 图内文字 */
+  --c-plate-line:   #6e675c;   /* 图内连线 */
+  --c-plate-accent: #2f6154;   /* 图内强调（默认节点描边） */
+  --c-plate-node:   #eae4d6;   /* 默认节点底 */
+  --c-plate-red:      #f0dfd9;  --c-plate-red-line:    #a03b31;
+  --c-plate-amber:    #f2e7d3;  --c-plate-amber-line:  #9d6127;
+  --c-plate-green:    #e2ebdf;  --c-plate-green-line:  #3e7247;
+  --c-plate-orange:   #f4e6da;  --c-plate-orange-line: #8a4b1c;
+  --c-plate-purple:   #e9e2ea;  --c-plate-purple-line: #6a4a78;
+  --c-plate-gray:     #e6e0d4;  --c-plate-gray-line:   #c9bfa9;
+  --c-plate-black:    #1e1c19;  --c-plate-black-line:  #141310;
+  --c-plate-onblack:  #fbf8f2;
+
+  /* 合成层：需要半透明叠色时，只在这里合成一次，规则里一律 var() 引用 */
+  --c-nav-bg:     rgba(251,248,242,.86);   /* 顶栏：书叶色压半透，滚动时仍透纸纹 */
+  --c-scrim:      rgba(30,28,25,.035);     /* 卡头上方的极淡压暗渐变 */
+  --c-sel-bg:     #d3e2da;                 /* 选中文本：铜绿浅底，不用浏览器默认蓝 */
+  --c-sel-fg:     #16281f;
+  --c-tint:       rgba(47,97,84,.055);     /* 章首元信息卡的底色渐变起点 */
+  --c-tint-2:     rgba(47,97,84,.025);
+  --c-hairline:   rgba(47,97,84,.22);      /* 强调色细线 */
+  --c-warn-bg:    rgba(157,97,39,.055);    /* 嵌套引言：朱/橙只作语义提示底 */
+  --c-photo-shade: rgba(30,28,25,.22);     /* 卷首艺术图底部的压暗带 */
+  --c-badge-bg:   rgba(30,28,25,.72);      /* 图上的序号牌：两主题同为「照片上压墨」，压到 6:1 才配得上 13px 白字 */
+  --c-badge-fg:   #f8f5ee;
+  --c-art-shadow: rgba(47,97,84,.20);      /* 封面艺术图的强调色投影 */
+  --c-print-paper: #fff;                   /* 打印档：纸面白纸黑墨是印刷约定，不随屏幕主题翻，
+                                                所以深档块里给同值；写在这里是为了让「规则里零字面量」
+                                                这条闸不需要为 @media print 开口子 */
+  --c-print-ink:   #000;
+  --c-sheet-hi:   rgba(255,255,255,.72);   /* 封面：从高光走到纸色 */
+  --c-sheet-hi-2: rgba(255,255,255,.92);
+  --cover-bg:
+    linear-gradient(180deg, var(--c-sheet-hi) 0%, var(--c-sheet-hi-2) 55%, var(--c-bg) 100%),
+    radial-gradient(ellipse 80% 60% at 70% 20%, var(--c-accent-bg), transparent 60%),
+    var(--c-bg);
+
+  /* Semantic — 全部往暖里调过一档，免得冷色 token 站在暖纸上像另一个站点 */
+  --c-blue:   #2f5d7c;
+  --c-cyan:   #276a71;
+  --c-green:  #3e7247;
+  --c-orange: #9d6127;
+  --c-red:    #a03b31;
+  --c-purple: #6a4a78;
+  --c-pink:   #97455f;
 
   /* Radius */
   --radius:     10px;
@@ -79,7 +132,7 @@ html {
 
 body {
   margin: 0;
-  background: var(--c-bg);
+  background: var(--c-desk);
   color: var(--c-text);
   font-family: var(--font-sans);
   font-size: 16px;
@@ -97,7 +150,7 @@ a:hover { color: var(--c-accent-hover); }
   position: fixed;
   top: 0; left: 0; right: 0;
   height: var(--navbar-h);
-  background: rgba(255,255,255,.85);
+  background: var(--c-nav-bg);
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   border-bottom: 1px solid var(--c-border);
@@ -293,7 +346,9 @@ a:hover { color: var(--c-accent-hover); }
   padding: 4px;
 }
 
-/* ============================== Content ============================== */
+/* ============================== Content ==============================
+   双层表面：.content 是「桌面」，.markdown-section 是压在桌上的一张纸。
+   阅读栏因此有了一条自己的物理边界，而不是无边无际的一屏白。 */
 .content {
   position: fixed;
   top: var(--navbar-h);
@@ -303,7 +358,7 @@ a:hover { color: var(--c-accent-hover); }
   overflow-y: auto;
   padding: 0;
   transition: left .3s ease;
-  background: var(--c-bg);
+  background: var(--c-desk);
 }
 
 article.markdown-section,
@@ -311,6 +366,11 @@ article.markdown-section,
   max-width: var(--content-max);
   margin: 0 auto;
   padding: 56px 64px 140px;
+  min-height: 100%;
+  background: var(--c-bg);
+  border-left: 1px solid var(--c-border);
+  border-right: 1px solid var(--c-border);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Content fade-in on page change */
@@ -441,9 +501,13 @@ article.markdown-section,
   font-weight: 400;
 }
 
-/* ============================== Prism Token Colors (Light) ============================== */
-.token.comment, .token.prolog, .token.cdata { color: #969896; font-style: italic; }
-.token.punctuation { color: #4f5b66; }
+/* ============================== 代码高亮（prism token）==============================
+   只写这一套，且只用会翻转的令牌：--c-blue/-green/-orange/-purple/-red 在深档各有自己的
+   值，所以代码色跟着主题一起翻，不需要（也不允许）再来一段 `html[data-theme='dark'] .token`。
+   先前深档确实有那样一段，带着六个高饱和的蓝紫粉橙字面量，是全书最后一处第二配色源；
+   冷调占比的读数与出处记在 DIAGNOSIS 的「栅格口径」一节。 */
+.token.comment, .token.prolog, .token.cdata { color: var(--c-text-3); font-style: italic; }
+.token.punctuation { color: var(--c-text-2); }
 .token.property, .token.tag, .token.boolean, .token.number,
 .token.constant, .token.symbol { color: var(--c-blue); }
 .token.selector, .token.attr-name, .token.string, .token.char,
@@ -527,7 +591,7 @@ article.markdown-section,
 /* Nested blockquote */
 .markdown-section blockquote blockquote {
   border-left-color: var(--c-orange);
-  background: rgba(234,88,12,.04);
+  background: var(--c-warn-bg);
   margin: 14px 0;
 }
 
@@ -580,6 +644,46 @@ article.markdown-section,
   color: var(--c-accent);
   font-weight: 700;
   letter-spacing: .01em;
+}
+
+/* ============================== 章题图（手工版画） ==============================
+   九个部分开卷章各一张，由 scripts/plate_engine.py 从 theme.css 的 --c-plate* 现读现画，
+   所以两张纸不可能对不上：SVG 里的纸色与卡底 token 同源，板外色由引擎自己判红。
+   ① 版式按"贴进书页的铜版"处理——细边 + 落地阴影，不加圆角大图那种悬浮感；
+   ② 题图两档同一张纸（不跟 --c-bg 翻），深档里它是压在暗页面上的一张浅色纸，
+      边线在浅档才起作用（浅档页底 #fbf8f2 与纸底 #f5f1e7 几乎同色，不描边就糊成一块）；
+   ③ 版心 12:5，390 档缩到约 133px 高。这里不横向滚动：题图是论点不是数据，
+      让读者在手机上拖着看一张装饰图，比承认细线在小图里变淡更糟。 */
+.markdown-section figure.chapter-plate {
+  margin: 26px 0 34px;
+  padding: 0;
+  border: none;
+}
+
+.markdown-section figure.chapter-plate img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+  border: 1px solid var(--c-plate-edge);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+
+.markdown-section figure.chapter-plate figcaption {
+  margin: 10px 0 0;
+  padding-top: 9px;
+  border-top: 1px solid var(--c-border);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.75;
+  letter-spacing: .01em;
+  color: var(--c-text-3);
+}
+
+@media (max-width: 768px) {
+  .markdown-section figure.chapter-plate { margin: 18px 0 26px; }
 }
 
 /* ============================== Keyboard ============================== */
@@ -683,8 +787,8 @@ section.cover::before {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 50% 50% at 30% 0%, rgba(79,70,229,.06), transparent),
-    radial-gradient(ellipse 50% 50% at 70% 100%, rgba(129,140,248,.05), transparent);
+    radial-gradient(ellipse 50% 50% at 30% 0%, var(--c-accent-soft), transparent),
+    radial-gradient(ellipse 50% 50% at 70% 100%, var(--c-accent-bg), transparent);
   pointer-events: none;
 }
 
@@ -730,8 +834,8 @@ section.cover .cover-main > p:nth-of-type(2) {
    这里出过一次白底白字：文件内两条规则各带一半 !important，高优先级那条只锁
    color:#fff、低优先级那条只锁 background:#fff，两个 !important 在不同属性上
    各自获胜，合成出 cr=1.0 的两枚隐形按钮（实测 1280/1440/390 三档一致）。
-   配对：主按钮＝强调色底＋纸色字，次按钮＝纸色底＋强调色字。--c-accent 在浅色主题
-   是深靛 #4f46e5、深色主题换浅靛 #818cf8，--c-bg 反向，两组配对两主题都 ≥6:1。 */
+   配对：主按钮＝强调色底＋纸色字，次按钮＝纸色底＋强调色字。--c-accent 浅档是铜绿、
+   深档提亮成淡铜绿，--c-bg 反向；两档各自实量 ≥6:1（第八条守卫 check_palette.py）。 */
 section.cover .cover-main p a[href]:not(.anchor) {
   display: inline-block;
   margin: 0 7px 10px;
@@ -910,7 +1014,7 @@ section.cover hr {
 
 /* ============================== Print ============================== */
 @media print {
-  body { background: #fff; color: #000; }
+  body { background: var(--c-print-paper); color: var(--c-print-ink); }
   .sidebar, .app-nav, .sidebar-toggle { display: none !important; }
   .content { position: static; overflow: visible; }
 }
@@ -923,8 +1027,8 @@ section.cover hr {
 .mermaid-block {
   margin: 28px 0 32px;
   padding: 20px 16px 12px;
-  background: var(--c-bg-soft);
-  border: 1px solid var(--c-border);
+  background: var(--c-plate);
+  border: 1px solid var(--c-plate-edge);
   border-radius: var(--radius-lg);
   overflow-x: auto;
 }
@@ -970,7 +1074,7 @@ section.cover hr {
 }
 
 .scroll-frame:has(> .mermaid-block) {
-  --c-veil: var(--c-bg-soft);     /* 图有自己的浅色卡底，渐隐要用卡底才不会露白边 */
+  --c-veil: var(--c-plate);       /* 渐隐用卡底色：图版两档同一张纸，跟主题翻会在深档露边 */
 }
 
 .scroll-veil {
@@ -1038,17 +1142,11 @@ section.cover hr {
 
 /* ============================== Cover page ============================== */
 section.cover {
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.72) 0%, rgba(255,255,255,.92) 55%, #fff 100%),
-    radial-gradient(ellipse 80% 60% at 70% 20%, rgba(79,70,229,.10), transparent 60%),
-    #fff !important;
+  background: var(--cover-bg) !important;
 }
 
 section.cover.show {
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.72) 0%, rgba(255,255,255,.92) 55%, #fff 100%),
-    radial-gradient(ellipse 80% 60% at 70% 20%, rgba(79,70,229,.10), transparent 60%),
-    #fff !important;
+  background: var(--cover-bg) !important;
 }
 
 section.cover .cover-main {
@@ -1347,8 +1445,8 @@ section.cover .cover-main > p:last-child {
 
 /* ============================== Chapter meta & tables ============================== */
 .markdown-section > blockquote:first-of-type {
-  background: linear-gradient(180deg, #f8f9ff 0%, #f3f4f8 100%);
-  border: 1px solid #dfe3f5 !important;
+  background: linear-gradient(180deg, var(--c-tint) 0%, var(--c-tint-2) 100%) var(--c-bg-soft);
+  border: 1px solid var(--c-hairline) !important;
   border-left: 3px solid var(--c-accent) !important;
   border-radius: var(--radius) !important;
   padding: 14px 18px !important;
@@ -1387,7 +1485,7 @@ section.cover .cover-main > p:last-child {
 }
 
 .markdown-section tbody tr:nth-child(2n) {
-  background: #fafbfc;
+  background: var(--c-bg-soft);
 }
 
 .markdown-section input[type="checkbox"] {
@@ -1406,13 +1504,13 @@ section.cover .cover-main > p:last-child {
   top: 0;
   display: block;
   height: 12px;
-  background: linear-gradient(180deg, rgba(0,0,0,.03), transparent);
+  background: linear-gradient(180deg, var(--c-scrim), transparent);
   pointer-events: none;
   z-index: 1;
   margin-bottom: -12px;
 }
 
-::selection { background: #c7d2fe; color: #1e1b4b; }
+::selection { background: var(--c-sel-bg); color: var(--c-sel-fg); }
 
 /* ================================================================
    升格层（出版级）—— 自托管字体 / 双主题 / 阅读进度 / 右侧 TOC
@@ -1473,35 +1571,56 @@ section.cover h1 { font-family: var(--font-serif); }
 html[data-theme='dark'] {
   color-scheme: dark;
 
-  --c-bg:          #0f1117;
-  --c-bg-soft:     #16181f;
-  --c-bg-sidebar:  #12141a;
-  --c-bg-elevated: #1c1f27;
-  --c-bg-hover:    #23262f;
-  --c-bg-code:     #15171e;
+  /* 深档不是浅档的反色：底色是「灯下的深色卡纸」（暖墨，带棕底），
+     文字是暖白而非纯白，铜绿提亮成淡铜绿——同一套色相，不同的明度关系。 */
+  --c-desk:        #121110;
+  --c-bg:          #1a1815;
+  --c-bg-soft:     #211e1a;
+  --c-bg-sidebar:  #171512;
+  --c-bg-elevated: #29241e;
+  --c-bg-hover:    #332d25;
+  --c-bg-code:     #1f1c18;
 
-  --c-text:       #e8eaf0;
-  --c-text-2:     #c3c7d0;
-  --c-text-3:     #8b909c;
-  --c-text-dim:   #63676f;
+  --c-text:       #ece6da;
+  --c-text-2:     #c8c0b1;
+  --c-text-3:     #9d9486;
+  --c-text-dim:   #948a79;   /* 页脚与翻页小字：上一版在深档实测 4.62–4.67:1，
+                                只比 4.5:1 的门多 0.12；提到这里留出余量，仍暗于 --c-text-3 */
 
-  --c-border:        #2a2d36;
-  --c-border-light:  #22252d;
-  --c-border-strong: #3a3e49;
+  --c-border:        #332e26;
+  --c-border-light:  #29241e;
+  --c-border-strong: #4b4437;
 
-  --c-accent:       #818cf8;
-  --c-accent-hover: #a5b4fc;
-  --c-accent-light: #6366f1;
-  --c-accent-soft:  rgba(129,140,248,.15);
-  --c-accent-bg:    rgba(129,140,248,.08);
+  --c-accent:       #8fbdb0;
+  --c-accent-hover: #a9cdc2;
+  --c-accent-light: #5f8d80;
+  --c-accent-soft:  rgba(143,189,176,.16);
+  --c-accent-bg:    rgba(143,189,176,.09);
 
-  --c-blue:   #7aa2f7;
-  --c-cyan:   #22d3ee;
-  --c-green:  #34d399;
-  --c-orange: #fb923c;
-  --c-red:    #f87171;
-  --c-purple: #a78bfa;
-  --c-pink:   #f472b6;
+  --c-nav-bg:     rgba(26,24,21,.82);
+  --c-scrim:      rgba(0,0,0,.45);
+  --c-sel-bg:     #3d6154;
+  --c-sel-fg:     #f4efe4;
+  --c-tint:       rgba(143,189,176,.075);
+  --c-tint-2:     rgba(143,189,176,.025);
+  --c-hairline:   rgba(143,189,176,.30);
+  --c-warn-bg:    rgba(213,160,102,.08);
+  --c-photo-shade: rgba(0,0,0,.5);
+  --c-badge-bg:   rgba(0,0,0,.58);
+  --c-badge-fg:   #f8f5ee;
+  --c-art-shadow: rgba(143,189,176,.14);
+  --c-print-paper: #fff;                   /* 打印不跟屏幕主题翻：与浅档同值，写全是为了令牌键集合对齐 */
+  --c-print-ink:   #000;
+  --c-sheet-hi:   rgba(46,41,33,.55);
+  --c-sheet-hi-2: rgba(33,30,26,.85);
+
+  --c-blue:   #86abc6;
+  --c-cyan:   #74b7bd;
+  --c-green:  #8dbb97;
+  --c-orange: #d5a066;
+  --c-red:    #e08b7f;
+  --c-purple: #b89bc4;
+  --c-pink:   #d594a9;
 
   --shadow-xs: 0 1px 2px rgba(0,0,0,.3);
   --shadow-sm: 0 1px 3px rgba(0,0,0,.35), 0 1px 2px rgba(0,0,0,.3);
@@ -1510,62 +1629,78 @@ html[data-theme='dark'] {
   --shadow-xl: 0 20px 25px -5px rgba(0,0,0,.5), 0 8px 10px -6px rgba(0,0,0,.45);
 }
 
-/* 深色模式对硬编码浅色的修正 */
-html[data-theme='dark'] body { background: var(--c-bg); }
+/* 深色主题下只剩这一条语义修正：行内代码在浅档走 --c-text，深档走本书唯一的强调色，
+   这样"代码是另一种声音"在两个主题里都由强调色承担，而不是各用一个色族。
+   顶栏、章首卡、斑马纹、渐变遮罩、选中色都不再需要补丁——它们的颜色全部来自
+   会翻转的令牌，补一份反而多出一个"只在深档才对"的第二事实源。
+   代码高亮（.token）原先在这里另有一整段、八个字面量色，已删：令牌本身会随主题翻转，
+   那一段既多余又是全书最后一处第二配色源。 */
 
-html[data-theme='dark'] .app-nav {
-  background: rgba(15,17,23,.82);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-}
-
-html[data-theme='dark'] .markdown-section > blockquote:first-of-type {
-  background: linear-gradient(180deg, #191c2a 0%, #171a22 100%) !important;
-  border: 1px solid #2c3050 !important;
-}
-
-html[data-theme='dark'] .markdown-section tbody tr:nth-child(2n) {
-  background: #171a21;
-}
-
-html[data-theme='dark'] .content::before {
-  background: linear-gradient(180deg, rgba(0,0,0,.45), transparent);
-}
-
-html[data-theme='dark'] ::selection { background: #312e81; color: #e0e7ff; }
-
-html[data-theme='dark'] .markdown-section code { color: var(--c-purple); }
-
-html[data-theme='dark'] .token.comment,
-html[data-theme='dark'] .token.prolog,
-html[data-theme='dark'] .token.cdata { color: #7d8590; }
-html[data-theme='dark'] .token.punctuation { color: #8b909c; }
-html[data-theme='dark'] .token.property, html[data-theme='dark'] .token.tag,
-html[data-theme='dark'] .token.boolean, html[data-theme='dark'] .token.number,
-html[data-theme='dark'] .token.constant, html[data-theme='dark'] .token.symbol { color: #7aa2f7; }
-html[data-theme='dark'] .token.selector, html[data-theme='dark'] .token.attr-name,
-html[data-theme='dark'] .token.string, html[data-theme='dark'] .token.char,
-html[data-theme='dark'] .token.builtin, html[data-theme='dark'] .token.inserted { color: #34d399; }
-html[data-theme='dark'] .token.operator, html[data-theme='dark'] .token.entity,
-html[data-theme='dark'] .token.url { color: #fb923c; }
-html[data-theme='dark'] .token.atrule, html[data-theme='dark'] .token.attr-value,
-html[data-theme='dark'] .token.keyword { color: #a78bfa; }
-html[data-theme='dark'] .token.function,
-html[data-theme='dark'] .token.class-name { color: #fbbf24; }
-html[data-theme='dark'] .token.regex, html[data-theme='dark'] .token.important,
-html[data-theme='dark'] .token.variable { color: #f472b6; }
-
-html[data-theme='dark'] section.cover {
-  background:
-    linear-gradient(180deg, rgba(15,17,23,.82) 0%, rgba(15,17,23,.94) 55%, #0f1117 100%),
-    radial-gradient(ellipse 80% 60% at 70% 20%, rgba(99,102,241,.16), transparent 60%),
-    #0f1117 !important;
-}
+html[data-theme='dark'] .markdown-section code { color: var(--c-accent); }
 
 /* 深色主题下封面书名不另外做渐变：沿用同一条实色规则，只靠 --c-text 换色，
    浅色/深色两套主题的书名渲染逻辑因此完全一致（避免"只在一种主题下隐形"）。 */
 
 html[data-theme='dark'] kbd { background: var(--c-bg-soft); }
+
+/* ============================== 书眉（signature）==============================
+   滚过本章大标题之后，标题本身退场、书眉进场：左章名、右书名，一条发丝线。
+   它固定在正文栏顶端，与 .content 的滚动无关，所以横向滚动、命中测试都不受它影响。 */
+.running-head {
+  position: fixed;
+  top: var(--navbar-h);
+  left: var(--sidebar-w);
+  right: 0;
+  z-index: 95;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 8px 56px 7px;
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: .08em;
+  color: var(--c-text-3);
+  background: var(--c-bg);
+  border-bottom: 1px solid var(--c-border-light);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity .22s ease, transform .22s ease;
+}
+
+.running-head.is-on {
+  opacity: 1;
+  transform: none;
+}
+
+.running-head .rh-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-serif);
+  font-weight: 600;
+}
+
+.running-head .rh-book {
+  flex: 0 0 auto;
+  font-size: 11px;
+  letter-spacing: .16em;
+  color: var(--c-text-dim);
+}
+
+@media (max-width: 1024px) {
+  .running-head { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .running-head { transition: none; transform: none; }
+}
+
+/* 封面（100vh、z-index 999）盖住整页时书眉不该在场；但更稳的是 doneEach 里
+   靠 section.cover.show 判断——见 updateRunHead。 */
 
 /* ============================== 阅读进度条 ============================== */
 .reading-progress {
@@ -1704,7 +1839,7 @@ body:has(section.cover.show) .float-controls { display: none !important; }
   position: absolute;
   inset: 0;
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, transparent 62%, rgba(15,17,23,.22));
+  background: linear-gradient(180deg, transparent 62%, var(--c-photo-shade));
   pointer-events: none;
 }
 
@@ -1732,7 +1867,6 @@ body:has(section.cover.show) .float-controls { display: none !important; }
   user-select: none;
   pointer-events: none;
 }
-html[data-theme='dark'] .part-number { -webkit-text-stroke: 2px #4c4a8a; opacity: .7; }
 
 .part-kicker {
   font-family: var(--font-serif);
@@ -1833,8 +1967,8 @@ section.cover img.cover-art {
   border-radius: 14px;
   border: 1px solid var(--c-border);
   box-shadow:
-    0 28px 56px -14px rgba(67,56,202,.38),
-    0 8px 20px -8px rgba(15,17,23,.22);
+    0 28px 56px -14px var(--c-art-shadow),
+    0 8px 20px -8px var(--c-photo-shade);
   margin-bottom: 40px;
   display: block;
   transition: transform .4s cubic-bezier(.2,.8,.2,1);
@@ -1886,8 +2020,8 @@ section.cover img.cover-art:hover { transform: translateY(-6px) scale(1.015); }
   font-family: var(--font-serif);
   font-size: 13px;
   font-weight: 700;
-  color: #fff;
-  background: rgba(15,17,23,.45);
+  color: var(--c-badge-fg);
+  background: var(--c-badge-bg);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   padding: 2px 10px;

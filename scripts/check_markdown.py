@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Markdown 结构闸：围栏成对、正文不裸写围栏串、HTML 块后必须空行隔开。
+"""Markdown 结构闸：围栏成对、正文不裸写围栏串、HTML 块后必须空行隔开、
+相对 HEAD 不丢小节标题、根/docs 双副本逐字节一致。
 
 Why：Docsify 用 marked 解析，两类破损都不报错、不产生死链，只有渲染后才看得见：
 · 正文里出现三个及以上反引号会被当作代码块起点，该行之后的整页被吞成裸文本
@@ -10,9 +11,11 @@ Why：Docsify 用 marked 解析，两类破损都不报错、不产生死链，�
 
 用法：python3 scripts/check_markdown.py            # 校验
       python3 scripts/check_markdown.py --count    # 只报覆盖量
+      python3 scripts/check_markdown.py --selftest # 标题闸的已知答案自检（4 条）
 """
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -43,6 +46,88 @@ def dual_copy_problems():
 
 def files():
     return sorted(DOCS.rglob("*.md")) + sorted(ROOT.glob("*.md"))
+
+
+# ---------------------------------------------------------------- 标题丢失闸
+# 为什么要加这一条（2026-09-24 实测）：本轮用 Edit 改稿时**连着三次**把下一块的
+# 头部一起吃掉了——ch27 少了一段围栏、ch26 少了 `## 21.5` 标题、ch05 少了 `## 3.3` 标题。
+# 围栏那类由本闸原有判据接住；**标题被吃掉既不破围栏也不破链接**，只剩一张没有标题的
+# 孤儿表格，Docsify 照渲染、链接照绿，读者却再也跳不到那一节。所以拿 HEAD 当基线对账。
+# 允许改名（改名不算丢失：用"互相包含"匹配），只判"这一节整块查无此人"。
+HEAD_MARK = re.compile(r"^ {,3}#{1,6}\s+(.*)$")
+NUM_PREFIX = re.compile(
+    r"^(?:第\s*[0-9一二三四五六七八九十百]+\s*[章部分篇]?|[0-9]+(?:\.[0-9]+)*[a-z]?"
+    r"|[①-⑳]|[A-Z][.、][0-9]+|[A-Z]{1,4}-[0-9IVX]+)\s*[｜|:：.、\s]*", re.I)
+
+
+def heading_titles(text):
+    """取正文所有标题，剥掉编号（J.6→J.9 这种重编号不该被判成丢失）。"""
+    out = []
+    for line in text.splitlines():
+        m = HEAD_MARK.match(line)
+        if not m:
+            continue
+        t = NUM_PREFIX.sub("", m.group(1).replace("**", "").strip()).strip()
+        out.append(t or m.group(1).strip())
+    return out
+
+
+def _survives(before, after):
+    """精确命中，或一方包含另一方（≥6 字）⇒ 视为改名后仍在。"""
+    if before in after:
+        return True
+    for t in after:
+        shorter = min(len(before), len(t))
+        if shorter >= 6 and (before in t or t in before):
+            return True
+    return False
+
+
+def lost_headings(base_text, cur_text):
+    """返回 base 里有、cur 里查无此人的标题（按重数比对）。"""
+    b, c = Counter(heading_titles(base_text)), Counter(heading_titles(cur_text))
+    return [t for t in b if not _survives(t, c)]
+
+
+def heading_problems():
+    import subprocess
+    problems, baselined = [], 0
+    for path in sorted(DOCS.rglob("*.md")):
+        rel = path.relative_to(ROOT).as_posix()
+        r = subprocess.run(["git", "-C", str(ROOT), "show", f"HEAD:{rel}"],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            continue                      # 本轮新建的文件：没有基线，不参与比对
+        baselined += 1
+        for t in lost_headings(r.stdout, path.read_text()):
+            problems.append(f"{rel}: HEAD 里的小节「{t}」在工作树查无此人"
+                            f"（改名不算丢失）→ 多半是编辑时把下一块的头部一起吃掉了")
+    if baselined < 60:
+        raise SystemExit(f"只有 {baselined} 个文件取到 HEAD 基线（<60）——"
+                         f"比对集近乎为空，这条闸不能算通过")
+    return problems, baselined
+
+
+def heading_selftest():
+    """已知答案 fixture：删除必须报、改名必须不报、原样必须 0。"""
+    base = "# 标题\n\n## 3.3 AI 使用规模（治理前 vs 治理后）\n\n## J.9 与治理章的映射\n"
+    cases = [
+        ("删掉一节 → 必须报 1 条", base.replace("## 3.3 AI 使用规模（治理前 vs 治理后）\n\n", ""), 1),
+        ("改标题名 → 必须不报", base.replace("与治理章的映射", "与治理章的映射与上下游"), 0),
+        ("原样不动 → 必须 0 条", base, 0),
+        ("重编号（J.9→J.11）→ 必须不报", base.replace("## J.9", "## J.11"), 0),
+    ]
+    bad = 0
+    for name, cur, want in cases:
+        got = len(lost_headings(base, cur))
+        flag = "✔" if got == want else "✘"
+        if got != want:
+            bad += 1
+        print(f"  [{flag}] {name}：报 {got} 条（应为 {want}）")
+    if bad:
+        raise SystemExit(f"标题闸的自检 {bad} 条不符——判据本身不可信")
+    print("  自检结论：删除会报、改名与重编号不报；判据的排除集没有被自己放宽。")
+    return 0
 
 
 def check(path):
@@ -80,6 +165,8 @@ def check(path):
 
 
 def main():
+    if "--selftest" in sys.argv:
+        return heading_selftest()
     problems, total_code, fence_lines = [], 0, 0
     for path in files():
         text = path.read_text()
@@ -88,8 +175,11 @@ def main():
         problems += p
         total_code += code
     problems += dual_copy_problems()
+    head_problems, baselined = heading_problems()
+    problems += head_problems
     if "--count" in sys.argv:
-        print(f"{len(files())} 个 md 文件 / {fence_lines} 行围栏标记 / {total_code} 行代码块内容。")
+        print(f"{len(files())} 个 md 文件 / {fence_lines} 行围栏标记 / {total_code} 行代码块内容"
+              f" / {baselined} 个文件有 HEAD 基线可对标题。")
         return 0
     if problems:
         print("不通过：")
@@ -99,7 +189,8 @@ def main():
         return 1
     print(
         f"{len(files())} 个 md 文件：围栏全部成对，正文无裸围栏串，"
-        f"HTML 块后无未隔空的 markdown 语法；{len(DUAL_COPY)} 对根/docs 副本逐字节一致。"
+        f"HTML 块后无未隔空的 markdown 语法；{len(DUAL_COPY)} 对根/docs 副本逐字节一致；"
+        f"{baselined} 个文件的相对 HEAD 小节标题零丢失。"
         "结构闸通过。"
     )
     return 0

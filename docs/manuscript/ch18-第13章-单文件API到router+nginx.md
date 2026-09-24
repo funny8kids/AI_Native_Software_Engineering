@@ -10,7 +10,7 @@ flowchart LR
   CUT --> S[service<br/>业务规则]
   CUT --> RP[repository<br/>数据访问]
   NG[nginx / 网关] --> R
-  style CUT fill:#fef3c7,stroke:#d97706,color:#1a1d23
+  style CUT fill:#f2e7d3,stroke:#9d6127,color:#1e1c19
 ```
 
 **图 13-1｜拆分一刀切在职责** — AI 按函数相似度拆会更纠缠；边界由人定。
@@ -26,6 +26,8 @@ flowchart LR
 **但这个拆法是错的。** AI 按函数的"大小"和"相似度"拆，不是按"职责"拆。它把"处理优惠券的函数"和"记录优惠券操作日志的函数"放在同一个文件里——因为它们都包含"优惠券"这个词。结果业务逻辑和日志逻辑纠缠得更紧了。
 
 这件事揭示了一个界限：**AI 擅长拆函数，但不擅长拆边界。** 函数是代码层面的概念，AI 看得清；边界是职责层面的概念，涉及"什么是业务逻辑、什么是数据访问、什么是路由"——这些区分需要架构意图，不在代码的字面里。
+
+图 13-1 里 `CUT` 那个节点只有三条出边，落点分别叫 router、service、repository——**没有一个边叫"优惠券"**。这张图要读者带走的就是这一点：切完之后每一片仍然叫得出**职责**，才叫边界；只叫得出业务名词的，那是模块，拆它不会让任何人少改一个文件。
 
 ---
 
@@ -115,9 +117,9 @@ flowchart LR
   CMP -->|异常| BACK[立即回切全量<br/>退回老入口]
   CMP -->|正常| UP[逐步放大新服务比例]
   UP --> NG
-  style NG fill:#eef2ff,stroke:#4f46e5,color:#1a1d23
-  style BACK fill:#fef2f2,stroke:#dc2626,color:#1a1d23
-  style UP fill:#ecfdf5,stroke:#059669,color:#1a1d23
+  style NG fill:#eae4d6,stroke:#2f6154,color:#1e1c19
+  style BACK fill:#f0dfd9,stroke:#a03b31,color:#1e1c19
+  style UP fill:#e2ebdf,stroke:#3e7247,color:#1e1c19
 ```
 
 **图 13-2｜nginx 灰度切流回路** — 小比例起步、对比监控、异常回切；切得回来，才敢切出去。
@@ -163,6 +165,57 @@ server {
 这份配置里最容易被删掉的是 upstream `old_entry`——**灰度未到全量之前，老入口不许下线**；它在 nginx 里留着，回切才是一行配置的事。
 
 > **代价声明**：拆分后该域的单接口平均响应时间显著下降（因为限流/超时挪到了 nginx，不再占用应用线程）。**但拆分过程的协调成本和运维配合成本，是这个性能提升背后的隐性投入。**
+
+### 工具落地卡：nginx —— 上面那段骨架，`-t` 现在就会拦你
+
+**版本口径**：nginx 1.30.x（stable，官网 download 页 2026-09-24 列 1.30.5）/ 1.31.x（mainline，列 1.31.6），开源版而非 NGINX Plus。**本卡的每条报错原文来自源码编译的 1.30.5**，输出字符串跟版本绑定，别跨版本照抄结论。
+
+**配置落点**：一个文件 `nginx.conf`，位置由编译期 `--conf-path` 决定（官方口径：源码编译默认 `prefix/conf/nginx.conf`；**发行版包与官方镜像的路径本次未核实**，别照抄 `/etc/nginx/…`）。本书要落的那一条是：**这份 conf 进版本库**（`deploy/nginx/{domain}.conf`），CI 用 `-t -c <仓库里那份> -p <prefix>` 校验——不去摸线上机器上那份，才谈得上"配置可追溯"。命令行工件没有版本锁文件，靠 `nginx -v` 与部署基线对齐。
+
+**最小可抄配置**（骨架，实测 `nginx -t` 一次通过；缺 `events` 块 nginx 直接报错）：
+
+```nginx
+worker_processes  auto;
+events { worker_connections 1024; }    # 这两行是能被 -t 接受的最小骨架
+
+http {
+    upstream book_backend {
+        server 127.0.0.1:8000;         # ★ 必须解析得到：写占位主机名，-t 阶段就挂（见下）
+        keepalive 32;                  # 必须配 proxy_http_version 1.1 才生效，否则每次新建连接
+    }
+    server {
+        listen 8080;
+        server_name book.example.com;
+        location /api/ {
+            proxy_pass         http://book_backend;   # 用 upstream 名走静态解析；带变量则必须另配 resolver
+            proxy_http_version 1.1;                   # 不写 = HTTP/1.0 + Connection: close，keepalive 全废
+            proxy_set_header   Host              $host;
+            proxy_set_header   X-Real-IP         $remote_addr;        # 不传则后端看到的 IP 全是 nginx 的
+            proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto $scheme;             # 后端判 https / 拼回调地址要用
+        }
+    }
+}
+```
+
+**跑完看哪条输出**：
+
+```text
+$ nginx -t -c /srv/ngx/conf/nginx.conf -p /srv/ngx
+nginx: the configuration file /srv/ngx/conf/nginx.conf syntax is ok
+nginx: configuration file /srv/ngx/conf/nginx.conf test is successful   ← 两行齐 + 退出码 0 才算过
+```
+
+- CI 想安静就 `nginx -t -q`：**两行都不打印，只留退出码**（实测 `-q` 下 `exit=0`）。
+- 指令名打错：`nginx: [emerg] unknown directive "worker_process" in /tmp/ngxtest/conf/bad.conf:1`，文件与行号自带。
+- 括号/分号错位：`nginx: [emerg] unexpected "}" in /tmp/ngxtest/conf/bad2.conf:2`。
+- **占位主机没替换——本节上面那段灰度骨架正好踩这条**：`nginx: [emerg] host not found in upstream "old-entry.internal:8080" in /tmp/ngxbook/conf/nginx.conf:5`。`upstream { server <不可解析主机>; }` 在 `-t` 阶段就要解析，**所以照抄灰度片段时，先把两个上游换成 IP 跑一次 `-t`，再换成真名**（实测同一骨架换成 `127.0.0.1:8081/8082` 后一次通过）。
+- `proxy_pass http://$entry;` 里的 `$entry` 没被 `split_clients` 定义时：`nginx: [emerg] unknown "entry" variable`——变量分流这条链，两个节点都得对上才亮。
+- 想看"最终生效的全量配置"（include 全算进去）：`nginx -T -c <conf> -p <prefix>`，stdout 首行就是 `# configuration file <路径>:`，这比 `cat` 单个文件可靠。
+- 改完配置 `nginx -s reload`。**reload 成功时终端打印什么：未核实**——官方 control 文档只描述信号语义（HUP = 换配置 + 老 worker 优雅退出），不承诺 stdout。要判成败就 `nginx -t` 前置 + `ps` 看 `nginx: master process` / `nginx: worker process is shutting down` 两行。
+- 容器里常见的前置告警：`nginx: [alert] could not open error log file: open() ".../logs/error.log" failed (2: No such file or directory)`——日志目录不存在会让后面所有判断都失真，先修环境再判断配置。
+
+**替代不了什么**：`nginx -t` 只做**语法与加载期检查**（指令是否存在、参数个数、上游主机能否解析、`listen` 是否重复）。它拦不住语义与容量：`rate=10r/s` 写小了、`proxy_read_timeout 5s` 掐死慢接口、灰度比例算错——**配置全绿，事故照出**（图 13-2 那条回路里"对比监控"和"异常回切"两格存在的理由就是这个）。它更不校验业务契约，接口结构变更的拦截仍在第 9 章的契约仓。
 
 ### 度量指标：拆分效果看哪几个数
 

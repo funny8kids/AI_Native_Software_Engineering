@@ -6,7 +6,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
   <meta name="description" content="《AI 原生软件工程》—— 当 AI 自己兜不住的时候，组织如何接管。四个真实案例，一套治理方法论。">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
-  <meta name="theme-color" content="#4f46e5">
+  <meta name="theme-color" content="#efeae0">
 
   <!-- 主题在首屏渲染前应用，避免深色闪烁。默认浅色；仅当用户明确选过深色才提前设置 -->
   <script>
@@ -26,8 +26,8 @@
 <body>
   <div id="app">
     <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:20px;">
-      <div style="width:40px;height:40px;border:3px solid #e5e7eb;border-top-color:#4f46e5;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
-      <p style="color:#4f46e5;font-family:system-ui,sans-serif;font-size:14px;">正在加载…</p>
+      <div style="width:40px;height:40px;border:3px solid var(--c-border);border-top-color:var(--c-accent);border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+      <p style="color:var(--c-accent);font-family:system-ui,sans-serif;font-size:14px;">正在加载…</p>
     </div>
     <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
   </div>
@@ -42,26 +42,97 @@
       catch (e) { return 'light'; }
     }
 
-    function ainseMermaidVars(dark) {
-      return dark
-        ? {
-            primaryColor: '#1e1b4b',
-            primaryTextColor: '#e8eaf0',
-            primaryBorderColor: '#818cf8',
-            lineColor: '#8b909c',
-            secondaryColor: '#1c1f27',
-            tertiaryColor: '#12141a',
-            fontSize: '14px',
-          }
-        : {
-            primaryColor: '#eef2ff',
-            primaryTextColor: '#1a1d23',
-            primaryBorderColor: '#4f46e5',
-            lineColor: '#6b7280',
-            secondaryColor: '#f7f8fa',
-            tertiaryColor: '#ffffff',
-            fontSize: '14px',
-          };
+    // 图的颜色不写在这里：一律从 theme.css 的 --c-plate-* 令牌现取。
+    // 注意取的是「图版」那一组——它们只在 :root 定义、深档不覆盖，所以两张主题下
+    // 图都是同一张纸。mermaid 不认 style 行里的 var()，正文只能带字面量，
+    // 而这些字面量的唯一出处就是这组令牌（第八条守卫逐条对账）。
+    // 兜底表必须与任何经 ainseToken 读走的令牌一一对应：漏一个名字，取不到值时
+    // 就会静默变成 'transparent'，站在暖纸上是一张没有底的图。
+    // 值全部取浅档——theme.css 没加载时深档同样不存在，这是唯一自洽的兜底口径。
+    var AINSE_FIG_FALLBACK = {
+      '--c-plate-node': '#eae4d6', '--c-plate': '#f5f1e7', '--c-plate-onblack': '#fbf8f2',
+      '--c-plate-ink': '#1e1c19', '--c-plate-accent': '#2f6154', '--c-plate-line': '#6e675c',
+      '--c-plate-green': '#e2ebdf', '--c-plate-orange': '#f4e6da', '--c-plate-purple': '#e9e2ea',
+      '--c-plate-amber': '#f2e7d3', '--c-plate-red': '#f0dfd9', '--c-plate-gray': '#e6e0d4',
+      '--c-plate-red-line': '#a03b31', '--c-plate-black-line': '#141310',
+      '--c-desk': '#efeae0', '--c-accent': '#2f6154'
+    };
+    function ainseToken(name) {
+      var v = '';
+      try {
+        v = getComputedStyle(document.documentElement).getPropertyValue(name);
+      } catch (e) { v = ''; }
+      v = (v || '').trim();
+      return v || AINSE_FIG_FALLBACK[name] || 'transparent';
+    }
+
+    function ainseMermaidVars() {
+      // mermaid 的 neutral 主题在构造器里把 mainBkg / nodeBorder / text / border1 /
+      // clusterBkg 写成冷灰（#eee #999 #333 #707070），primaryColor 顶不掉它们——
+      // 未加 style 行的节点因此站在暖纸上像另一个站点的图（第八条守卫实测 fill=rgb(238,238,238)）。
+      // 下面这些键名逐条对照 vendor/mermaid.min.js 的样式模板取用，无一是装饰：
+      //   flowchart  .node rect{fill:mainBkg;stroke:nodeBorder} .cluster rect{fill:clusterBkg;stroke:clusterBorder}
+      //              .cluster text{fill:titleColor} .label text{fill:nodeTextColor||textColor}
+      //   mindmap    .section-N rect|path{fill:cScaleN} .section-N text{fill:cScaleLabelN}（按 THEME_COLOR_LIMIT 循环）
+      //   sequence   .actor{fill:actorBkg;stroke:actorBorder} text.actor>tspan{fill:actorTextColor}
+      //              .messageText{fill:signalTextColor} .note{fill:noteBkgColor} .noteText{fill:noteTextColor}
+      //              .labelBox{fill:labelBoxBkgColor} .loopText{fill:loopTextColor} .sequenceNumber{fill:sequenceNumberColor}
+      //   state      .state-end{fill:innerEndBackground} .end-state-inner{fill:compositeBackground||background}
+      //              g.stateGroup .state-title{fill:stateLabelColor} .node rect{fill:stateBkg||mainBkg;stroke:stateBorder||nodeBorder}
+      //   gantt      .task0{fill:taskBkgColor;stroke:taskBorderColor} .section0{fill:sectionBkgColor}
+      //              .done0{fill:doneTaskBkgColor} .active0{fill:activeTaskBkgColor} .crit0{fill:critBkgColor}
+      //              .taskText0{fill:taskTextColor} .doneText/.activeText{fill:taskTextDarkColor} .critText{fill:taskTextLightColor}
+      //              .grid .tick{stroke:gridColor} .today{stroke:todayLineColor}
+      var t = ainseToken;
+      var vars = {
+        primaryColor: t('--c-plate-node'),
+        primaryTextColor: t('--c-plate-ink'),
+        primaryBorderColor: t('--c-plate-accent'),
+        lineColor: t('--c-plate-line'),
+        secondaryColor: t('--c-plate'),
+        tertiaryColor: t('--c-plate-onblack'),
+        background: t('--c-plate-node'),
+        edgeLabelBackground: t('--c-plate'),
+        textColor: t('--c-plate-ink'),
+        fontSize: '14px',
+        mainBkg: t('--c-plate-node'),
+        nodeBorder: t('--c-plate-accent'),
+        nodeTextColor: t('--c-plate-ink'),
+        titleColor: t('--c-plate-ink'),
+        clusterBkg: t('--c-plate'),
+        clusterBorder: t('--c-plate-line'),
+        arrowheadColor: t('--c-plate-line'),
+        actorBkg: t('--c-plate-node'), actorBorder: t('--c-plate-accent'),
+        actorTextColor: t('--c-plate-ink'), actorLineColor: t('--c-plate-line'),
+        signalColor: t('--c-plate-line'), signalTextColor: t('--c-plate-ink'),
+        labelBoxBkgColor: t('--c-plate'), labelBoxBorderColor: t('--c-plate-line'),
+        labelTextColor: t('--c-plate-ink'), loopTextColor: t('--c-plate-ink'),
+        noteBkgColor: t('--c-plate-amber'), noteBorderColor: t('--c-plate-line'),
+        noteTextColor: t('--c-plate-ink'),
+        activationBkgColor: t('--c-plate-gray'), activationBorderColor: t('--c-plate-accent'),
+        sequenceNumberColor: t('--c-plate-ink'),
+        stateBkg: t('--c-plate-node'), stateBorder: t('--c-plate-accent'),
+        stateLabelColor: t('--c-plate-ink'),
+        innerEndBackground: t('--c-plate-ink'), compositeBackground: t('--c-plate-ink'),
+        sectionBkgColor: t('--c-plate-gray'), sectionBkgColor2: t('--c-plate-node'),
+        altSectionBkgColor: t('--c-plate'), gridColor: t('--c-plate-line'),
+        todayLineColor: t('--c-plate-accent'),
+        taskBkgColor: t('--c-plate-node'), taskBorderColor: t('--c-plate-accent'),
+        taskTextColor: t('--c-plate-ink'), taskTextOutsideColor: t('--c-plate-ink'),
+        taskTextDarkColor: t('--c-plate-ink'), taskTextLightColor: t('--c-plate-onblack'),
+        activeTaskBkgColor: t('--c-plate-green'), activeTaskBorderColor: t('--c-plate-line'),
+        doneTaskBkgColor: t('--c-plate-gray'), doneTaskBorderColor: t('--c-plate-line'),
+        critBkgColor: t('--c-plate-red-line'), critBorderColor: t('--c-plate-black-line'),
+      };
+      // 脑图分区色：mermaid 默认对 primaryColor 做 30°/60°/90° 色相旋转，转出来是冷调
+      // 粉彩，标签还按背景明暗自动配成 #333。这里直接复用工整的六色图版、标签统一墨黑。
+      var scale = ['--c-plate-node', '--c-plate-green', '--c-plate-orange',
+                   '--c-plate-purple', '--c-plate-amber', '--c-plate-red'];
+      for (var i = 0; i < 12; i++) {
+        vars['cScale' + i] = t(scale[i % scale.length]);
+        vars['cScaleLabel' + i] = t('--c-plate-ink');
+      }
+      return vars;
     }
 
     // 甘特图在 mermaid 内部按「宿主父元素的 offsetWidth」定宽；本主题的 .mermaid
@@ -88,7 +159,7 @@
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Hiragino Sans GB", sans-serif',
         gantt: { useWidth: ainseGanttWidth() },
         flowchart: { curve: 'basis', htmlLabels: true },
-        themeVariables: ainseMermaidVars(dark),
+        themeVariables: ainseMermaidVars(),
       });
     }
 
@@ -274,7 +345,7 @@
       },
       auto2top: true,
       relativePath: false,
-      themeColor: '#4f46e5',
+      themeColor: ainseToken('--c-accent'),
       formatUpdated: '{YYYY}-{MM}-{DD}',
       pagination: {
         previousText: '上一章',
@@ -380,18 +451,21 @@
             ainseInitMermaid(ainseGetTheme() === 'dark');
 
             // Docsify wraps unrendered mermaid in <code class="lang-mermaid"> inside <pre>
+            // ⚠ 三条候选都必须是 `pre` 的直接子元素：正文里的行内 `` `flowchart TD` `` 是一句话，
+            // 不是图。先前的写法允许裸 `code.lang-mermaid`，于是下面那段兜底把 DIAGNOSIS 里的
+            // 行内代码盖上章、又因为没有 `<pre>` 可替换而留在原地——读起来像"一张图没渲染"。
             var codes = document.querySelectorAll(
-              '.markdown-section pre[data-lang="mermaid"] code, .markdown-section code.lang-mermaid, .markdown-section pre > code.language-mermaid'
+              '.markdown-section pre[data-lang="mermaid"] code, .markdown-section pre > code.lang-mermaid, .markdown-section pre > code.language-mermaid'
             );
 
-            // Fallback: any code whose text looks like mermaid diagram source
+            // Fallback: any **block** code whose text looks like mermaid diagram source
             if (!codes.length) {
-              var all = document.querySelectorAll('.markdown-section code');
+              var all = document.querySelectorAll('.markdown-section pre > code');
               all.forEach(function (el) {
                 var t = el.textContent || '';
                 if (/^(flowchart|graph|sequenceDiagram|stateDiagram|erDiagram|gantt|mindmap|timeline|classDiagram|pie)\b/.test(t.trim())) {
                   el.classList.add('lang-mermaid');
-                  codes = document.querySelectorAll('.markdown-section code.lang-mermaid');
+                  codes = document.querySelectorAll('.markdown-section pre > code.lang-mermaid');
                 }
               });
             }
@@ -442,10 +516,35 @@
             else root.removeAttribute('data-theme');
             try { localStorage.setItem(AINSE_THEME_KEY, t); } catch (e) {}
             var m = document.querySelector('meta[name="theme-color"]');
-            if (m) m.setAttribute('content', t === 'dark' ? '#0f1117' : '#4f46e5');
+            if (m) m.setAttribute('content', ainseToken('--c-desk'));
             var btn = document.getElementById('btn-theme');
             if (btn) btn.innerHTML = t === 'dark' ? AINSE_ICONS.sun : AINSE_ICONS.moon;
             if (rerender) ainseRerenderMermaid(t === 'dark');
+          }
+
+          // 书眉：这一章的标题钉在正文栏顶端，读者滚到任意一页仍知道自己在第几章。
+          // 印刷书的 running head 是本章唯一的"常驻"元素，因此它必须不参与点击。
+          var runHeadH1 = null;
+          function buildRunHead() {
+            var head = document.getElementById('running-head');
+            if (!head) {
+              head = document.createElement('div');
+              head.className = 'running-head';
+              head.id = 'running-head';
+              head.setAttribute('aria-hidden', 'true');
+              head.innerHTML = '<span class="rh-title"></span><span class="rh-book">AI 原生软件工程</span>';
+              document.body.appendChild(head);
+            }
+            runHeadH1 = document.querySelector('.markdown-section h1');
+            head.querySelector('.rh-title').textContent = runHeadH1 ? runHeadH1.textContent.trim() : '';
+          }
+
+          function updateRunHead() {
+            var head = document.getElementById('running-head');
+            if (!head) return;
+            var past = false;
+            if (runHeadH1) past = runHeadH1.getBoundingClientRect().bottom < 100;
+            head.classList.toggle('is-on', past && !document.querySelector('section.cover.show'));
           }
 
           function buildToc() {
@@ -502,6 +601,7 @@
             var topBtn = document.getElementById('btn-back-top');
             if (topBtn) topBtn.classList.toggle('hidden', c.scrollTop < 480);
             updateTocActive();
+            updateRunHead();
           }
 
           hook.init(function () {
@@ -563,6 +663,7 @@
 
           hook.doneEach(function () {
             buildToc();
+            buildRunHead();
             onScroll();
           });
         },

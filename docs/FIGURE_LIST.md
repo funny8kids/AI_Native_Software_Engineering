@@ -3,7 +3,7 @@
 > 规则：技术图 = Mermaid；封面/卷首/头图 = 抽象位图（无文字）。可读对象 ≤12（定义见 `BOOK_SPEC.md` §9）。术语见 `GLOSSARY.md`。
 > **本表的图数、图号、图型三列由 `python3 scripts/check_figures.py --print` 从手稿实测生成，不手写。**
 > 最近一次刷新：2026-09-24。实测结论：**107 张技术图**（手稿 43 个文件 104 张 + 站点页 3 张），**107/107 通过浏览器端 `mermaid.parse` 全量校验，0 语法错误**；守卫同时判定每章 2–5 张、图号按阅读顺序递增、图注与图一一对应、节点上限全部达标。
-> 配套：`python3 scripts/check_links.py`（自带临时服务器，无需手工起站）→ 去重后 **97 条本地引用 URL 全部 HTTP 200，死链 = 0**；已用两条假链做过变异自检，确认守卫会红。图在窄屏是否被缩糊由第六条守卫 `check_mobile.py --report` 逐图给 `viewBox / 渲染宽 / 缩放`；**图上的字能不能读清、以及宽图宽表有没有"还能滚"的暗示，由第七条守卫 `check_legibility.py` 把住**——它按每张图自己的 `viewBox` 与自然字号解出所需宽度，判据是「任意视口下有效字号 ≥11px」+「每个需横向滚动的容器都挂了随 `scrollLeft` 更新的边缘暗示，且暗示层不吃点击」，`--report` 逐图给 `自然字号 / 有效字号 / 缩放`，`--screenshot DIR` 出逐图截图。
+> 配套：`python3 scripts/check_links.py`（**要先起本地服务**：`python3 -m http.server 8080 --directory docs`——它把每条本地引用换成真实 HTTP 请求，所以没有服务就没有判据）→ 去重后的全部本地引用 URL 均 HTTP 200、死链 = 0；**引用条数随正文增删而变，以命令自己打印的那一行为准**，这里不写死。它的失败方向也记一笔：服务没起时它把**全部**引用报成死链并退出 1，不会把"取不到"洗成"通过"。已用两条假链做过变异自检，确认守卫会红。图在窄屏是否被缩糊由第六条守卫 `check_mobile.py --report` 逐图给 `viewBox / 渲染宽 / 缩放`；**图上的字能不能读清、以及宽图宽表有没有"还能滚"的暗示，由第七条守卫 `check_legibility.py` 把住**——它按每张图自己的 `viewBox` 与自然字号解出所需宽度，判据是「任意视口下有效字号 ≥11px」+「每个需横向滚动的容器都挂了随 `scrollLeft` 更新的边缘暗示，且暗示层不吃点击」，`--report` 逐图给 `自然字号 / 有效字号 / 缩放`，`--screenshot DIR` 出逐图截图。
 
 ## 每文件图数（实测）
 
@@ -87,6 +87,29 @@
 | 案例一～四头图 | `docs/assets/case-{ecommerce,exchange,quant,agent}.webp` | 完成 |
 | 九部分卷首艺术 | `docs/assets/part1-cognition … part9-convergence.webp`（9 张） | 完成 |
 
+## 题图（手工版画 SVG，9 张，共 164.9 KB）
+
+九个**部分开卷章**各一张，母题不重复。体积逐张由 `ls` 实测，不是估的。
+
+| 章 | 母题 | 路径 | 体积 |
+|---|---|---|---|
+| ch06 第 1 章 | 筛子 | `assets/plates/ch06-sieve.svg` | 38.9 KB |
+| ch10 第 5 章 | 探沟剖面 | `assets/plates/ch10-strata.svg` | 13.5 KB |
+| ch13 第 8 章 | 等高线 | `assets/plates/ch13-contour.svg` | 20.4 KB |
+| ch17 第 12 章 | 织机 | `assets/plates/ch17-loom.svg` | 23.0 KB |
+| ch21 第 16 章 | 桁架 | `assets/plates/ch21-truss.svg` | 15.3 KB |
+| ch24 第 19 章 | 水闸 | `assets/plates/ch24-gate.svg` | 10.5 KB |
+| ch28 第 23 章 | 卡尺 | `assets/plates/ch28-caliper.svg` | 13.7 KB |
+| ch33 第 28 章 | 溢洪道 | `assets/plates/ch33-spillway.svg` | 10.5 KB |
+| ch38 第 33 章 | 回波屏 | `assets/plates/ch38-radar.svg` | 19.2 KB |
+
+四条不是顺手写下的取舍：
+
+1. **为什么不是位图**：本机图像生成接口返回 403（配额），而"先冷生成再后期调色"要欠两笔债——色板对不上 token、放大即糊。于是改由 `scripts/plate_engine.py` 现读 `theme.css` 的 `--c-plate*` 令牌画矢量：板外色在构造上不可能出现，任意视口不糊，整批 164.9 KB。
+2. **为什么只有 9 张**：42 章 ÷ 9 个母题会读成贴纸。题图只压在部分开卷章，与"部分"这一层结构对齐。
+3. **描边按页面实际宽度预放大 1.792×**：CDP 量 `.chapter-plate img` 的 `getBoundingClientRect().width`，1280 与 1440 两档同为 **670px**（正文栏有 max-width，视口加宽不加宽图），390 档 **340px**。不预放大的第一版在 1280 截图里 0.8 档发丝线只有 0.447 CSS px，整张像蒙了层灰——这就是"不够高级"的具体形状。改口径要连这条读数一起改：`plate_engine.py` 顶部 `DISPLAY_W`。
+4. **覆盖边界（谁看不见它）**：题图经 `<img>` 引用，第八条配色闸的 DOM 对比度读数**看不见 SVG 内部**——它量的是页面，不是纸里。题图的颜色纪律由引擎自己的 `check()` 把住（板外色 / XML 解析失败 / 含 `<text>` 三种都判红），窄档可读性由 `check_palette.py --screenshot` 的 390 档截图人工复核：340×132 的版面上，最细一档落回 0.4px 级，题图是论点不是数据，因此不做横向滚动，接受细线变淡。
+
 ## 自托管字体（零 CDN）
 
 `scripts/build_fonts.py` 从本机 Noto CJK TTC 的 SC 面（face 2）子集化，charset 覆盖 docs 全部 md/html 实际用字（1,903 字）：
@@ -116,6 +139,10 @@ python3 scripts/check_mobile.py --report              # 逐图输出 viewBox / �
 python3 scripts/check_legibility.py                   # 第七条：有效字号地板 + 滚动暗示覆盖率（真浏览器、真点主题按钮）
 python3 scripts/check_legibility.py --report          # 逐图输出 自然字号 / 有效字号 / 缩放
 python3 scripts/check_legibility.py --mutate          # 第七条的变异自检 A–E：每条判据各自要能报红
+python3 scripts/check_palette.py                      # 第八条：token 纪律 + 逐层 alpha 合成后的对比度（真浏览器、真点 #btn-theme）
+python3 scripts/check_palette.py --mutate             # 第八条的变异自检：七条判据各自要能报红
+python3 scripts/check_palette.py --screenshot DIR     # 1280/1440/390 × 浅/深 逐页截图（题图与配色改动后逐项复核用这条）
+python3 scripts/plate_engine.py --check               # 题图引擎自检：板外色 / XML 解析 / 含 <text> 三种都判红
 # 浏览器端：对 107 个围栏逐个 mermaid.parse（本表刷新时 107/107 通过）
 ```
 

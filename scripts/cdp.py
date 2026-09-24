@@ -25,8 +25,40 @@ import tempfile
 import time
 import urllib.request
 import shutil
+import sys
 
 CHROME = os.environ.get("AINSE_CHROME", "/usr/bin/google-chrome")
+
+
+def safe_text(value: object, limit: int = 0) -> str:
+    """把 CDP 回来的文本变成一定能 print 的字符串（先拼代理对，再截断）。
+
+    为什么需要（2026-09-24 实测）：交互闸查出 1 条真失败，却在**打印这条失败**
+    时崩掉——UnicodeEncodeError: surrogates not allowed。Chrome 会送回孤立代理位
+    （它自己截断字符串时就可能剩半个 emoji），按码位再截一刀还会切出第二个。
+    守卫看不见自己的结论，这一轮就等于白跑，而且退出码 1 的理由是错的。
+    """
+    s = value if isinstance(value, str) else str(value)
+    out: list[str] = []
+    i, n = 0, len(s)
+    while i < n:
+        o = ord(s[i])
+        if 0xD800 <= o <= 0xDBFF and i + 1 < n and 0xDC00 <= ord(s[i + 1]) <= 0xDFFF:
+            out.append(chr(0x10000 + (o - 0xD800) * 0x400 + (ord(s[i + 1]) - 0xDC00)))
+            i += 2
+            continue
+        out.append("\ufffd" if 0xD800 <= o <= 0xDFFF else s[i])
+        i += 1
+    s = "".join(out)
+    return s[:limit] if limit else s
+
+
+for _stream in (sys.stdout, sys.stderr):    # 兜底：漏网的码位替换成 ? 而不是让守卫崩在报告上
+    try:
+        _stream.reconfigure(errors="replace")
+    except Exception:
+        pass
+
 
 
 def free_port() -> int:
