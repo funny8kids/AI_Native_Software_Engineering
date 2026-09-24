@@ -129,15 +129,29 @@ def inline_refs(text):
 
 
 def check_refs(corpus):
-    """corpus: [(名字, 全文)] → (问题列表, 引用条数, 图注条数)。
+    """corpus: [(名字, 全文)] → (问题列表, 引用条数, 唯一编号数, 图注条数)。
 
-    两条判据：
+    三条判据：
     1. 正文里每一处「图 X-Y」都必须落到全书某条真图注上（悬空引用 = 读者点空）。
     2. 每条图注必须在**自己那一节**的正文里至少被指一次（无锚图 = 读者路过而不停下）。
+    3. 全书图注编号**唯一**（撞号 = 读者手里的「见图 R-2」不再指代一张确定的图）。
+       这一条为什么必须看列表而不是集合：判据 1 用 set 做解析，两处图注撞成一个编号时
+       set 里只剩一个，引用照样"落到真图注上"、每文件的递增判定也照样通过——2026-09-25
+       实测 ch02 与 ch04 各自独立用了 R-1/R-2/R-3，前两条判据全绿，6 张图 3 个编号。
     覆盖集自证：引用数为 0 不是"通过"而是口径失效，由 --selftest 的对照 B 把住。
     """
-    ids = {c[0] for _, t in corpus for c in captions(t)}
+    where = {}
+    n_cap = 0
+    for name, text in corpus:
+        for cap_id, title in captions(text):
+            where.setdefault(cap_id, []).append((name, title))
+            n_cap += 1
+    ids = set(where)
     problems = []
+    for cid, locs in sorted(where.items()):
+        if len(locs) > 1:
+            who = "、".join(f"{n[:-3]}「{t}」" for n, t in locs)
+            problems.append(f"图 {cid} 撞号 {len(locs)} 处（全书图注必须唯一）→ {who}")
     n_ref = 0
     for name, text in corpus:
         found = set(inline_refs(text))
@@ -148,7 +162,7 @@ def check_refs(corpus):
         for cap_id, _ in captions(text):
             if cap_id not in found and name.startswith("ch"):
                 problems.append(f"{stem}: 图 {cap_id} 在正文里没有任何指向（无锚图）")
-    return problems, n_ref, len(ids)
+    return problems, n_ref, len(ids), n_cap
 
 
 FIXTURES = {
@@ -183,23 +197,38 @@ graph LR
 **图 I-1｜题** — 附录图，无人引用。
 """,
         2, 2),
+    # 这一条是 2026-09-25 撞号事故的正向复现：两个文件各自用了同一个 R-1，
+    # 单看每个文件都"图号递增、引用可解析"，只有把 corpus 当成一个整体才看得见。
+    "跨文件撞号 → 报一条（图注唯一性只在多文件语料上成立）": (
+        [("ch02-路线图.md", """甘特见 图 R-1。
+
+**图 R-1｜90 天甘特** — 先止血。
+"""),
+         ("ch04-角色卡.md", """博弈轴见 图 R-1。
+
+**图 R-1｜博弈轴** — 另一个文件的另一张图，编号撞了。
+""")],
+        2, 1),
 }
 
 
 def selftest(corpus):
     """已知答案的 fixture 对照 + 真书基准的覆盖读数。"""
     ok = True
-    base, n_ref, n_id = check_refs(corpus)
+    base, n_ref, n_id, n_cap = check_refs(corpus)
     anchored = sum(1 for n, t in corpus if n.startswith("ch")
                    for c in captions(t) if c[0] in set(inline_refs(t)))
-    print(f"[基准] {len(corpus)} 文件 / 图注 {n_id} 条 / 正文引用 {n_ref} 条 / "
-          f"有锚图 {anchored} 条 / 报红 {len(base)} 条")
+    print(f"[基准] {len(corpus)} 文件 / 图注 {n_cap} 条（唯一编号 {n_id} 个）/ "
+          f"正文引用 {n_ref} 条 / 有锚图 {anchored} 条 / 报红 {len(base)} 条")
     if n_ref == 0:
         print("  ✗ 基准抓到 0 条引用——口径没有读者，撤掉这条判据或修口径")
         ok = False
+    if n_cap != n_id:
+        print(f"  ✗ 基准里就有 {n_cap - n_id} 处撞号——唯一性判据没在真书上跑绿")
+        ok = False
     for i, (label, (text, want_ref, want_prob)) in enumerate(FIXTURES.items(), 1):
-        corpus_fx = [("ch99-fixture.md", text)]
-        probs, got_ref, _ = check_refs(corpus_fx)
+        corpus_fx = text if isinstance(text, list) else [("ch99-fixture.md", text)]
+        probs, got_ref, _, _ = check_refs(corpus_fx)
         good = (got_ref == want_ref and len(probs) == want_prob)
         ok &= good
         print(f"  对照 {chr(64+i)} {label} → 引用 {got_ref}（应 {want_ref}）"
@@ -249,7 +278,7 @@ def main():
         site.append((name[:-3], len(blocks), "、".join(c[0] for c in captions(text)), kinds))
     site_total = sum(n for _, n, _, _ in site)
 
-    ref_problems, n_ref, n_cap = check_refs(corpus)
+    ref_problems, n_ref, n_id, n_cap = check_refs(corpus)
     problems += ref_problems
 
     if "--print" in sys.argv:
@@ -259,13 +288,15 @@ def main():
             print(f"| {stem}（站点页） | {n} | {ids} | {kinds} |")
 
     print(f"手稿 {len(rows)} 个文件 / {total_ms} 张图；站点页 {site_total} 张；合计 {total_ms + site_total} 张。")
-    print(f"正文图引用 {n_ref} 条 / 全书图注 {n_cap} 条 / 悬空 {len(ref_problems)} 条。")
+    print(f"正文图引用 {n_ref} 条 / 全书图注 {n_cap} 条（唯一编号 {n_id} 个）/ "
+          f"悬空与撞号 {len(ref_problems)} 条。")
     if problems:
         print("\n不通过：")
         for p in problems:
             print(" -", p)
         return 1
-    print("BOOK_SPEC §9 校验通过：每章 2–5 张、图号递增、图注与图一一对应、节点 ≤12、正文图引用全部可解析。")
+    print("BOOK_SPEC §9 校验通过：每章 2–5 张、图号递增、图注与图一一对应、节点 ≤12、"
+          "正文图引用全部可解析、图注编号全书唯一。")
     return 0
 
 
