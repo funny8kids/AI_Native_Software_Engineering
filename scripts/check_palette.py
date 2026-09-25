@@ -54,6 +54,7 @@ hover_selftest()（七支干净样本不许报红、七支坏样本各报自己�
 from __future__ import annotations
 
 import argparse
+import ast
 import functools
 import http.server
 import json
@@ -73,6 +74,7 @@ from check_legibility import dismiss_cover, same_landing  # noqa: E402  # 揭幕
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
+SCRIPTS_DIR = ROOT / "scripts"      # 第八条把同目录的守卫件也过一遍死定义判据
 SIDEBAR = DOCS / "_sidebar.md"
 THEME = DOCS / "theme.css"
 
@@ -103,13 +105,17 @@ def parse_tokens(css: str) -> tuple[dict[str, str], dict[str, str]]:
 LITERAL = re.compile(r"#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)")
 
 
-def strip_comments(css: str) -> str:
-    """注释里的色值是说明文字不是样式。用等量换行占位，保证去注释后行号与原文对齐。"""
-    return re.sub(r"/\*.*?\*/", lambda m: "\n" * m.group(0).count("\n"), css, flags=re.S)
+def strip_css_comments(css: str) -> str:
+    """CSS 只有 `/* */` 一种注释：把它换成**等长空格**，行号与字符偏移都不动。
+    （等长而不是等行数：本文件里的死声明判据要按偏移反查原文行号，
+      偏移一移位号就全错。原来这里另有其事——它与此前定义的同名函数被 Python
+      悄悄换掉了，见 dead_py_defs 那条判据自己抓出来的第一次真红。）"""
+    return re.sub(r"/\*.*?\*/", lambda m: re.sub(r"[^\n]", " ", m.group(0)),
+                  css, flags=re.S)
 
 
 def token_line_spans(css: str) -> list[tuple[int, int]]:
-    """两个令牌块的 1-based 起止行号（含）。strip_comments 保留行数，所以去注释后的
+    """两个令牌块的 1-based 起止行号（含）。strip_css_comments 保留行数，所以去注释后的
     第 i 行就是原文第 i 行——可以直接按行号排除，不需要重新对齐。"""
     lines = css.splitlines()
 
@@ -136,7 +142,7 @@ def token_line_spans(css: str) -> list[tuple[int, int]]:
 
 def scan_literal_colors(theme_text: str) -> list[str]:
     """判据①·上半：theme.css 规则里不许有字面量色值（三类例外除外）。"""
-    body = strip_comments(theme_text)
+    body = strip_css_comments(theme_text)
     spans = token_line_spans(theme_text)
     fails = []
     for i, line in enumerate(body.splitlines(), 1):
@@ -152,6 +158,286 @@ def scan_literal_colors(theme_text: str) -> list[str]:
         fails.append(f"[theme.css:{i}] 规则里出现字面量色值 {LITERAL.findall(line)} —— "
                      f"请收进 :root / 深色令牌块：{line.strip()[:100]}")
     return fails
+
+
+# ============================== 判据①·下半：写了永不生效的死声明 ==============================
+"""「文件里写了」与「页面算出来还是它」是两个事实——这句话本文件已经在两个地方付过学费：
+`.search` 被运行时注入的插件表赢（生效对账，按页面计算值判），以及 `meta theme-color` 停在
+上一版令牌（抄件登记）。这一支管的是第三格，也是生效对账够不到的那一格：**同一份文件里，
+自己压住自己**。
+
+2026-09-25 立这一支的直接起因有两条，都是一次全站扫描当场量出来的：
+ 1. theme.css 里有 20 条声明被同栈、同选择器、同属性的后一条无条件压住
+    （`::selection` 两条并存、`.markdown-section blockquote` 被升格层整块换掉、
+     `.markdown-section h1[id], h2[id], h3[id]` 的 scroll-margin-top 对 h2/h3 是谎话
+     ——下面那条只重写了 h2/h3，h1 还活着），改这些行等于没改，而下一个读者不知道；
+ 2. 本文件自己就有一份：`strip_comments` 在第 106 行和第 436 行各定义一次，Python 让后者
+    赢——于是 theme.css 的字面量扫描悄悄用上了"会连 `//` 之后整行抹掉"的那个剔注释器。
+    今天全站唯一的 `//` 在 `xmlns='http://...'` 里被 `:` 救下（剔除条件跳过 `://`），
+    所以还没有活的受害者；但那是运气，不是判据。
+"""
+
+# 成员定义型 at-rule：同一个关键字写四次是在**列举成员**（一个字族四种字重），
+# 不是四次覆盖。按名字豁免，不按"看着像"豁免。@media / @supports / @layer 不在此列。
+MEMBER_AT_RULES = ("@font-face", "@property", "@counter-style", "@font-feature-values",
+                   "@page", "@color-profile", "@font-palette-values")
+
+CSS_STRING = re.compile(r"'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"")
+
+
+def _css_strip_strings(s: str) -> str:
+    """字符串换成 ''，用来判断"这个块里还有没有嵌套规则"。
+    （字符类里排掉了引号与反斜杠，换行本来就能穿，不需要 DOTALL。）"""
+    return CSS_STRING.sub("''", s)
+
+
+def _css_match_block(src: str, open_at: int):
+    """open_at 指向 '{'；返回 (体的起止, 配对 '}' 之后的下标)。字符串与嵌套括号都跟。
+    不跟字符串的话，`content: "a}b"` 会把整份文件的结构读塌——那是量具自己的错，不是页面的。"""
+    depth, j, q, n = 0, open_at, "", len(src)
+    while j < n:
+        c = src[j]
+        if q:
+            if c == "\\":
+                j += 2
+                continue
+            if c == q:
+                q = ""
+        elif c in "\"'":
+            q = c
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return (open_at + 1, j), j + 1
+        j += 1
+    return (open_at + 1, n), n
+
+
+def _css_decls(src: str, a: int, b: int):
+    """在 [a,b) 这个**声明块**里按 ; 切出 (偏移, 属性, 值)。字符串里的 ; 不算分隔符
+    （`url(data:…;base64,…)` 就是这么把一条声明切成两半的）。"""
+    parts, buf, q, start = [], "", "", a
+    i = a
+    while i < b:
+        c = src[i]
+        if q:
+            buf += c
+            if c == "\\":
+                buf += src[i + 1:i + 2]
+                i += 2
+                continue
+            if c == q:
+                q = ""
+        elif c in "\"'":
+            q = c
+            buf += c
+        elif c == ";":
+            parts.append((start, buf))
+            start, buf = i + 1, ""
+        else:
+            buf += c
+        i += 1
+    if buf.strip():
+        parts.append((start, buf))
+    out = []
+    for off, chunk in parts:
+        m = re.match(r"\s*([a-zA-Z-]+)\s*:\s*(\S.*)$", chunk, flags=re.S)
+        if not m:
+            continue
+        # off 停在上一条的 ; 之后（多行块里那是一串换行）——行号要落在**属性本身**那一行
+        out.append((off + len(chunk) - len(chunk.lstrip()),
+                    m.group(1).strip().lower(), " ".join(m.group(2).split())))
+    return out
+
+
+def css_declarations(css_text: str) -> list[dict]:
+    """把一份 CSS 摊平成 [{sel, prop, off, line, at, value}]；容器 at-rule 递归并带上栈。
+    只收 `prop: value` 形态的声明（自定义属性 --* 由令牌纪律那一条管，这里不重复判）。"""
+    src = strip_css_comments(css_text)
+    rows: list[dict] = []
+
+    def walk(a: int, b: int, at: tuple) -> None:
+        i, buf = a, ""
+        while i < b:
+            c = src[i]
+            if c == "{":
+                selector = " ".join(buf.split())
+                buf = ""
+                (ba, bb), i = _css_match_block(src, i)
+                if "{" in _css_strip_strings(src[ba:bb]):
+                    walk(ba, bb, at + (selector,))
+                else:
+                    for off, prop, value in _css_decls(src, ba, bb):
+                        if prop.startswith("--"):
+                            continue
+                        for one in {" ".join(s.split()) for s in selector.split(",")}:
+                            rows.append({"sel": one, "prop": prop, "off": off,
+                                         "line": src.count("\n", 0, off) + 1,
+                                         "at": at, "value": value})
+                continue
+            if c == "}":
+                buf = ""
+                i += 1
+                continue
+            buf += c
+            i += 1
+
+    walk(0, len(src), ())
+    return rows
+
+
+def judge_dead_decls(rows: list[dict], label: str) -> list[str]:
+    """纯函数：同 at-rule 栈、同选择器、同属性出现两次以上 ⇒ 除赢家以外每一条都是死的。
+    赢家规则：带 !important 的最后一条赢；一条都没有就是最后一条赢。
+    注意"活着的最后一条"这一支——带 !important 的声明之后的那些**看着最新**，其实一辈子
+    被那条 important 压着；只判"前一条死"会漏掉这半边。"""
+    groups: dict[tuple, list[dict]] = {}
+    for r in rows:
+        head = r["at"][0] if r["at"] else r["sel"]
+        if head.startswith(MEMBER_AT_RULES):
+            continue
+        groups.setdefault((r["at"], r["sel"], r["prop"]), []).append(r)
+    fails: list[str] = []
+    for (at, sel, prop), rs in groups.items():
+        if len(rs) < 2:
+            continue
+        imp = [bool(re.search(r"!\s*important\s*$", r["value"])) for r in rs]
+        winner = max((i for i, v in enumerate(imp) if v), default=len(rs) - 1)
+        where = " / ".join(at) if at else "顶层"
+        for i, r in enumerate(rs):
+            if i == winner:
+                continue
+            fails.append(f"[死声明·{label}] {sel} 的 {prop}（栈 [{where}]）写了 {len(rs)} 次，"
+                         f"只有第 {rs[winner]['line']} 行生效——第 {r['line']} 行永不生效："
+                         f"{{ {prop}: {r['value']} }}；留着它，下一个改这行的人会以为自己在改页面")
+    return fails
+
+
+def dead_css_decls(theme_text: str, label: str = "theme.css") -> tuple[list[str], int, int]:
+    """返回（清单，声明总数，死声明条数）。总数交回去打印：报 0 之前要看得见分母。"""
+    rows = css_declarations(theme_text)
+    return judge_dead_decls(rows, label), len(rows), sum(
+        1 for f in judge_dead_decls(rows, label))
+
+
+def dead_py_defs(source: str, name: str) -> list[str]:
+    """同一个 .py 里**顶层同名** def/class 定义两次：Python 让后者赢，前一条永不执行。
+    只判顶层无条件的那一种——函数内的同名、@ 装饰器下的重载、`if TYPE_CHECKING:` 里的
+    替身都是合法写法，误判一次，下次就有人拿 !important 之外的那招把整条判据放宽。"""
+    fails: list[str] = []
+    try:
+        tree = ast.parse(source, filename=name)
+    except SyntaxError as e:
+        return [f"[死定义·{name}] 语法读不过去：{e}——这一份没被看过，不算通过"]
+    seen: dict[tuple[str, str], int] = {}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if node.decorator_list:
+                continue          # 带装饰器的重复定义常是有意注册，不在这一格
+            key = (type(node).__name__, node.name)
+            if key in seen:
+                kind = "class" if isinstance(node, ast.ClassDef) else "def"
+                fails.append(f"[死定义·{name}] {kind} {node.name} 在第 {seen[key]} 行和第 {node.lineno} "
+                             f"行各定义一次，Python 让后写的赢——第 {seen[key]} 行那份永不执行；"
+                             f"改它等于没改")
+            else:
+                seen[key] = node.lineno
+    return fails
+
+
+def guard_selfcheck() -> tuple[list[str], int]:
+    """第八条把**自己**和同目录的守卫件也过一遍——判据不检自己，就等于判据在骗人。
+    清单从仓库派生（scripts/*.py），不抄文件名：抄的那一份会在第一个新守卫落地当天漏检。"""
+    files = sorted(p for p in SCRIPTS_DIR.glob("*.py") if p.is_file())
+    if not files:
+        raise SystemExit(f"{SCRIPTS_DIR} 下一个 .py 都没枚举到——自检没跑，不是通过")
+    fails: list[str] = []
+    for p in files:
+        fails += dead_py_defs(p.read_text(encoding="utf-8"), p.name)
+    return fails, len(files)
+
+
+def dead_decl_selftest() -> None:
+    """死声明判据的自证：真形状要能红，合法形状不许红（成员定义、跨介质、带装饰器），
+    而且"最后一条才是死的"那一半（被前面的 !important 压住）也要能红。"""
+    css = """
+:root { --c-x: #fff; }
+::selection { background: #aaa; color: #111; }
+::selection { background: #bbb; color: #222; }
+.markdown-section pre { border: 1px solid red; border-radius: 4px !important; }
+.markdown-section pre { border: 2px solid blue; }
+@media (max-width: 768px) { a.b { color: #111; } }
+@media (min-width: 769px) { a.b { color: #222; } }
+@font-face { font-family: 'Noto'; src: url(a.woff2); }
+@font-face { font-family: 'Noto'; src: url(b.woff2); }
+@keyframes k { from { opacity: 0 } }
+@keyframes k { from { opacity: 1 } }
+a.c { color: #123456 !important; }
+a.c { color: #654321; }
+a.d { color: #000 } a.d { color: #fff }
+"""
+    rows = css_declarations(css)
+    got = judge_dead_decls(rows, "自证")
+    bad: list[str] = []
+
+    def must(needle: str) -> None:
+        if not any(needle in f for f in got):
+            bad.append(f"该报的没报：「{needle}」")
+
+    def must_not(needle: str) -> None:
+        if any(needle in f for f in got):
+            bad.append(f"不该报的报了：「{needle}」")
+
+    must("::selection 的 background")
+    must("::selection 的 color")
+    must("pre 的 border")
+    must("a.d 的 color")                        # 同一行写两条也要抓到
+    must("from 的 opacity（栈 [@keyframes k]）")  # @keyframes 不是成员定义，两条 from 是真覆盖
+    must("a.c 的 color")                        # 后写的那条被前面的 !important 压住
+    if not any("只有第 13 行生效" in f and "第 14 行永不生效" in f for f in got):
+        bad.append("赢家判错：a.c 的赢家应是带 !important 的第 13 行，不是最后一条")
+    must_not("@font-face 的 font-family")   # 成员定义不是覆盖
+    must_not("a.b 的 color")                # 两条在不同 @media 里，各在自己的介质生效
+    if len(rows) != 19:
+        # 19 是照着样例逐条数出来的：::selection 2+2、pre 2+1、a.b 1+1（跨介质）、
+        # @font-face 2+2、@keyframes 的 from 1+1、a.c 1+1、a.d 1+1；:root 里那条
+        # 自定义属性按口径不算（归令牌纪律管）。这条相等判据是"解析走完了没有"的锚：
+        # 只设下限（第一版写的是 <20）等于没有——样例以后加一条就悄悄假绿。
+        bad.append(f"样例 CSS 摊出 {len(rows)} 条声明，与逐条数出来的 19 条不等——解析没走完或多走")
+    if bad:
+        raise SystemExit("死声明判据自证未过：\n  " + "\n  ".join(bad))
+
+
+def dead_py_selftest() -> None:
+    """Python 侧同名定义的自证：真重复要红，三种合法写法不许红。"""
+    src = ("import re\n"
+           "def f(): pass\n"
+           "class C: pass\n"
+           "def f(): pass\n"
+           "def g():\n"
+           "    def f(): pass\n"
+           "    return f\n"
+           "@overload\n"
+           "def h(a: int) -> int: ...\n"
+           "@overload\n"
+           "def h(a: str) -> str: ...\n"
+           "if True:\n"
+           "    def k(): pass\n"
+           "else:\n"
+           "    def k(): pass\n")
+    got = dead_py_defs(src, "自证.py")
+    names = " ".join(f.split("]")[1] for f in got)
+    bad = []
+    if not any("def f 在第 2 行和第 4 行" in f for f in got):
+        bad.append(f"顶层同名 def 没抓到：{got}")
+    for not_dead in ("class C", "def g", "def h", "def k"):
+        if not_dead in names:
+            bad.append(f"合法写法被误判成死定义（{not_dead}）：{got}")
+    if bad:
+        raise SystemExit("死定义判据自证未过：\n  " + "\n  ".join(bad))
+
 
 
 MERMAID_DIR = re.compile(r"^\s*(?:style|classDef|linkStyle)\b")
@@ -433,7 +719,7 @@ META_THEME_COLOR = re.compile(
 INDEX_TOKEN_HOSTS = (("meta[name=theme-color] content", META_THEME_COLOR, "--c-desk"),)
 
 
-def strip_comments(text: str) -> str:
+def strip_markup_comments(text: str) -> str:
     """把 // 行注释与 /* */ 块注释换成等长空格（偏移必须原样保留：登记表是按字符区间认宿主的）。
 
     为什么要剔：index.html 的注释里写着 mermaid 默认主题的冷灰（#eee #999 #333 #707070）和
@@ -475,7 +761,7 @@ def scan_index_literals(index_text: str, light: dict[str, str]) -> tuple[list[st
 
     返回（失败清单，在场宿主数，枚举到的字面量总数，表外未登记数）。总数是覆盖率读数：
     它少于登记表项数就说明枚举口径自己瞎了（正则不匹配 ≠ 文件干净），直接中止。"""
-    code = strip_comments(index_text)
+    code = strip_markup_comments(index_text)
     fails: list[str] = []
     spans: list[tuple[int, int]] = []
     fb = FALLBACK_BLOCK.search(code)
@@ -538,7 +824,7 @@ def index_literal_selftest() -> None:
     四支坏件各报自己那一条：抄件停在旧值／表外冒出一个抄件／登记宿主消失／令牌在 theme.css 查无。
 
     干净件里**必须**带一行注释里的色和一块块注释：真 index.html 的注释里正好有 mermaid 那四个
-    冷灰，不测这一支等于没测 strip_comments()——而漏测的下一步就是拿假阳去放宽判据。"""
+    冷灰，不测这一支等于没测 strip_markup_comments()——而漏测的下一步就是拿假阳去放宽判据。"""
     light = {"--c-desk": "#f7f5f0", "--c-accent": "#2b7159", "--c-plate": "#fbf8f1"}
     bad: list[str] = []
     ok_fails, hosts, found, stray = scan_index_literals(CLEAN_INDEX, light)
@@ -2431,6 +2717,11 @@ MUTATIONS = [
      _HOVER_TITLE_BLOCK, "", "没有任何反馈"),
     ("P21 书名 hover 字色改成边框灰（反馈有了，字糊了）", "theme.css",
      _HOVER_TITLE_BLOCK, P21_NEW, "字反而糊了"),
+    # 死声明判据的坏样本：故意挑一个**值与现网完全相同**的重复块——颜色、token 纪律、
+    # 对比度、焦点环、悬停五支口径全都看不出问题（它没改任何画出来的东西），
+    # 只有「写了两次、前一次永不生效」这一支会红。这条变异就是那条判据的存在理由本身。
+    ("P22 追加一个与现网同值的 blockquote 背景块（画面对，前一次写了没人读）", "theme.css",
+     "", "\n.markdown-section blockquote {\n  background: var(--c-bg-soft);\n}\n", "永不生效"),
 ]
 
 
@@ -2503,6 +2794,8 @@ def static_fails(theme_path: Path = THEME, docs_dir: Path = DOCS) -> tuple:
     effect_selftest()
     hover_selftest()
     index_literal_selftest()
+    dead_decl_selftest()
+    dead_py_selftest()
     light, dark = parse_tokens(theme_path.read_text())
     fails = scan_literal_colors(theme_path.read_text())
     md_fails, seen = scan_mermaid_palette(docs_dir, light)
@@ -2514,9 +2807,16 @@ def static_fails(theme_path: Path = THEME, docs_dir: Path = DOCS) -> tuple:
     lit_fails, hosts, found, stray = scan_index_literals(index_text, light)
     ras_fails, raster = scan_raster_anchor(docs_dir, light)
     band_fails, bands, pairs, band_themes, tight_pair, tight_paper = scan_band_separation(docs_dir, light, dark)
-    return (fails + md_fails + fb_fails + lit_fails + ras_fails + band_fails,
-            seen, refs, entries, raster, bands, pairs, band_themes, tight_pair, tight_paper,
-            hosts, found, stray)
+    dead_fails, css_rows, css_groups = dead_css_decls(theme_path.read_text())
+    guard_fails, guard_files = guard_selfcheck()
+    return (fails + md_fails + fb_fails + lit_fails + ras_fails + band_fails
+            + dead_fails + guard_fails,
+            {"tokens": (len(light), len(dark)), "mermaid": seen, "refs": refs,
+             "entries": entries, "raster": raster, "bands": bands, "pairs": pairs,
+             "band_themes": band_themes, "tight_pair": tight_pair, "tight_paper": tight_paper,
+             "hosts": hosts, "found": found, "stray": stray,
+             "css_rows": css_rows, "css_groups": css_groups, "dead": len(dead_fails),
+             "guard_files": guard_files, "guard_defs": len(guard_fails)})
 
 
 def main() -> int:
@@ -2534,8 +2834,12 @@ def main() -> int:
     pages = ["ALL"] if args.pages == "ALL" else [p.strip() for p in args.pages.split(",")]
 
     if args.mutate:
-        print("[变异自检] 十九条变异各打红一条判据（P3/P8 同属 token 纪律、P18/P19 同属抄件登记，共十七条），"
-              "且必须按各自的机制打红")
+        # 条数与针数都在运行时数：注释里写死"十九条/共十七条"那种句式已经腐烂过一次
+        # （P20/P21 落地那天它就开始少报两条）。
+        needles = {m[4] for m in MUTATIONS}
+        print(f"[变异自检] {len(MUTATIONS)} 条变异各打红一条判据，针 {len(needles)} 种具名拒判"
+              f"（有的判据有两个分支，如 P3/P8 同属 token 纪律、P18/P19 同属抄件登记），"
+              f"且必须按各自的机制打红")
         bad = run_mutations()
         print(f"[变异自检] {'全部命中' if bad == 0 else str(bad) + ' 条变异存活——判据有失明'}")
         return 0 if bad == 0 else 1
@@ -2545,25 +2849,29 @@ def main() -> int:
         shot.mkdir(parents=True, exist_ok=True)
 
     light, dark = parse_tokens(THEME.read_text())
-    (static, seen, refs, entries, raster, bands, pairs, band_themes, tight_pair, tight_paper,
-     hosts, found, stray) = static_fails()
-    print(f"[静态] 浅档令牌 {len(light)} 个 / 深档覆盖 {len(dark)} 个；"
-          f"mermaid 颜色指令 {seen} 条，全部等于 --c-plate-* 令牌值：{not any('不在图版令牌里' in f for f in static)}")
-    print(f"[静态] index.html 读取的令牌 {refs} 个 / 兜底表 {entries} 项，"
+    static, S = static_fails()
+    print(f"[静态] 浅档令牌 {S['tokens'][0]} 个 / 深档覆盖 {S['tokens'][1]} 个；"
+          f"mermaid 颜色指令 {S['mermaid']} 条，全部等于 --c-plate-* 令牌值：{not any('不在图版令牌里' in f for f in static)}")
+    print(f"[静态] index.html 读取的令牌 {S['refs']} 个 / 兜底表 {S['entries']} 项，"
           f"逐项与令牌相等：{not any('兜底' in f for f in static)}")
-    print(f"[静态] index.html 枚举到 {found} 处色字面量 / 抄件宿主 {hosts} 个在场，"
-          f"宿主之外未登记 {stray} 处："
+    print(f"[静态] index.html 枚举到 {S['found']} 处色字面量 / 抄件宿主 {S['hosts']} 个在场，"
+          f"宿主之外未登记 {S['stray']} 处："
           f"{not any('抄件' in f for f in static)}")
-    print(f"[静态] 位图派生件 {raster} 张（除 cover.webp），锚点回执逐键等于当前令牌："
+    print(f"[静态] 位图派生件 {S['raster']} 张（除 cover.webp），锚点回执逐键等于当前令牌："
           f"{not any('锚点回执' in f for f in static)}")
-    print(f"[静态] 分色族 {bands} 档（按令牌名枚举，非按面值）× {band_themes} = {pairs} 对，"
+    print(f"[静态] 分色族 {S['bands']} 档（按令牌名枚举，非按面值）× {S['band_themes']} = {S['pairs']} 对，"
           f"两两 ΔE≥{MIN_BAND_DELTA}、离纸底 ΔE≥{MIN_PAPER_DELTA}："
           f"{not any('分色族' in f for f in static)}")
     # 余量而不是只报过/没过：地板是 4.0，贴着地板过与宽裕地过不是一回事——
     # 下一次提亮只会往"更亮＝更贴纸底"走，看得见余量才知道还剩多少可花。
-    if tight_pair and tight_paper:
-        print(f"       最紧的一对 ΔE {tight_pair[0]:.2f}（{tight_pair[1]}，地板 {MIN_BAND_DELTA}）；"
-              f"最贴纸底的一档 ΔE {tight_paper[0]:.2f}（{tight_paper[1]}，地板 {MIN_PAPER_DELTA}）")
+    if S["tight_pair"] and S["tight_paper"]:
+        print(f"       最紧的一对 ΔE {S['tight_pair'][0]:.2f}（{S['tight_pair'][1]}，地板 {MIN_BAND_DELTA}）；"
+              f"最贴纸底的一档 ΔE {S['tight_paper'][0]:.2f}（{S['tight_paper'][1]}，地板 {MIN_PAPER_DELTA}）")
+    print(f"[静态] theme.css 摊出 {S['css_rows']} 条声明（含 @media 里面那些），"
+          f"其中 {S['css_groups']} 条被同文件同选择器的后一条压住、永不生效："
+          f"{S['dead'] == 0}")
+    print(f"[静态] 守卫件自己过堂：{S['guard_files']} 个 scripts/*.py 里顶层同名定义 "
+          f"{S['guard_defs']} 处：{S['guard_defs'] == 0}")
     for f in static[:20]:
         print("  ✗", f)
 

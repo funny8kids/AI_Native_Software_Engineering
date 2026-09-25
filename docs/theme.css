@@ -548,8 +548,9 @@ article.markdown-section,
 
 .markdown-section pre {
   background: var(--c-bg-code);
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius);
+  /* border / border-radius 曾写在这里，被下面「升格层」同名规则（带 !important）无条件压住
+     ——2026-09-25 由第八条的死声明判据量出并删掉：留着的坏处不是冗余，是下一个改这行的人
+     会以为自己在改页面。真值只住一处：见文件后半 .markdown-section pre 那条。 */
   padding: 0;
   margin: 24px 0;
   overflow-x: auto;
@@ -603,11 +604,9 @@ article.markdown-section,
   border-collapse: separate;
   border-spacing: 0;
   margin: 28px 0;
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius);
-  overflow: hidden;
+  /* border / border-radius / overflow / box-shadow 四条曾被升格层同名规则整块压住（永不生效），
+     2026-09-25 删；现在表格的这四条只有 .markdown-section table 那一处真值。 */
   font-size: 14px;
-  box-shadow: var(--shadow-sm);
 }
 
 .markdown-section thead {
@@ -642,14 +641,12 @@ article.markdown-section,
 /* ============================== Blockquotes ============================== */
 .markdown-section blockquote {
   margin: 24px 0;
-  padding: 16px 24px;
-  background: var(--c-accent-bg);
   border: none;
-  border-left: 4px solid var(--c-accent);
-  border-radius: 0 var(--radius) var(--radius) 0;
   color: var(--c-text-2);
   font-size: 15px;
   position: relative;
+  /* padding / background / border-left / border-radius 四条是升格层那份（带 !important）的
+     手下败将，2026-09-25 删——引文块的立条宽度与底色只看文件后半那一条。 */
 }
 
 .markdown-section blockquote p { margin: 8px 0; }
@@ -838,7 +835,8 @@ section.cover {
   top: 0; left: 0; right: 0;
   z-index: 999;
   text-align: center;
-  background: var(--c-bg) !important;
+  /* 这里曾写过 background: var(--c-bg) !important —— 同为 !important、写在后面的
+     「Cover page」那一节赢了它（--cover-bg），所以这条从没画到过屏幕上。2026-09-25 删。 */
   padding: 40px 24px;
   overflow: hidden;
 }
@@ -947,14 +945,11 @@ section.cover .cover-main p a[href*="manuscript"]:not(.anchor):hover {
 section.cover blockquote {
   background: none;
   border: none;
-  border-left: none;
-  color: var(--c-text-3);
-  font-size: 16px;
   font-style: italic;
-  margin: 56px auto 0;
-  max-width: 520px;
   padding: 0;
   border-radius: 0;
+  /* 立条、字色、字号、上下间距、最大宽度五条曾被「升格层」的 section.cover blockquote
+     （全是 !important）整条压住，2026-09-25 删——封面题词的尺寸只看那一处。 */
 }
 section.cover blockquote p { color: var(--c-text-3); }
 
@@ -976,10 +971,15 @@ section.cover hr {
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--c-text-dim); }
 
-::selection { background: var(--c-accent-soft); color: var(--c-accent); }
+/* 选中文本的配色只有一处：文件后半的 `::selection { background: var(--c-sel-bg); color:
+   var(--c-sel-fg) }`（两档各一套令牌）。这里原来还有一条用 --c-accent-soft/--c-accent 的
+   ——同选择器、写在后面那条之前，从未生效过，2026-09-25 由第八条的死声明判据删掉。
+   顺手量过一次：两条 sel 令牌都是**不透明**底，所以选中态不随宿主底色变化，读得清。 */
 
 /* ============================== Anchor Links ============================== */
-.markdown-section h1[id], .markdown-section h2[id], .markdown-section h3[id] {
+/* 只列 h1：h2/h3 的同名偏移在文件末尾「增强滚动锚点余量」那条里（28px），
+   从前这三档共用一条 24px，其中 h2/h3 那两份早就是死声明——拆开写才看得出各是多少。 */
+.markdown-section h1[id] {
   scroll-margin-top: calc(var(--navbar-h) + 24px);
 }
 
