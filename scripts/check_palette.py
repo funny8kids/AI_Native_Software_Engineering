@@ -30,14 +30,22 @@
 ④ 键盘焦点环（浏览器）：焦点指示是"非文本对比度"（WCAG 1.4.11 ≥3:1），前三个房间都量不到
    它——它判的是像素而不是声明。真按 Tab 逐站取视口像素：环宽、环色是否就是全站那一个强调色、
    环在四侧里至少两侧画得出来、控件留在自己祖先滚动口内的比例、环对邻边的对比度。
+⑤ 悬停可辨性（浏览器）：指针扫到一个能点的东西上必须有回应，回应完还要读得清。这一支量的是
+   "**两态之差**"，前面四条量的都是单态——全站最典型的一类洞在这里才现形：`.active` 与
+   `:hover` 同特异度、靠书写顺序赢掉悬停，规则在场而反馈没有。候选集与去重键都从现场派生
+   （静息计算样式签名），不写死清单。见下面的「第八条 · 悬停可辨性」。
 
 外加三条自证：真点 #btn-theme 并断言 data-theme 与令牌值同时翻转（否则"换了档"是假的）；
 覆盖集与独立口径（TreeWalker 数文本节点）对账，空集或漏量即中止；焦点判据先过
-focus_selftest()（一支干净记录不许报红、九支坏记录各报自己那一条）。
+focus_selftest()（一支干净记录不许报红、九支坏记录各报自己那一条）、悬停判据先过
+hover_selftest()（七支干净样本不许报红、七支坏样本各报自己那一条）。
 
 用法：
-    python3 scripts/check_palette.py                        # 全量：62 条路由 × 1280/1440/390 × 浅/深
-    python3 scripts/check_palette.py --mutate               # 变异自检：P1–P19 各自要能被打红
+    python3 scripts/check_palette.py                        # 全量：全站路由 × 1280/1440/390 × 浅/深
+                                                            # （悬停那一支另跑 1280/1680 两趟）
+    python3 scripts/check_palette.py --mutate               # 变异自检：每条变异各自要被打红
+                                                            # （条数由 --mutate 自己打印，
+                                                            #  注释里不复述，免得腐烂成假计数）
     python3 scripts/check_palette.py --screenshot DIR       # 供人工逐项复核的截图
     python3 scripts/check_palette.py --report               # 打印对比度最低的若干对前景/底色
 
@@ -1351,6 +1359,508 @@ EFFECT_PROBE_JS = """(() => {
 })()""" % repr([list(r) for r in EFFECT_LEDGER])
 
 
+# ============================== 第八条 · 悬停可辨性 ==============================
+"""指针扫到一个能点的东西上，界面必须回一下；回完还得读得清。
+
+这条为什么不能靠读 CSS 代替：规则在不在是一回事，页面算出来变不变是另一回事。
+2026-09-25 全站量下来 54 种静息签名里有 4 种完全没回应——侧栏书名、顶栏当前项、
+侧栏当前章节、右侧目录当前项。后三处是 `.active` 与 `:hover` **同特异度、靠书写
+顺序赢掉了悬停**（`.app-nav a.active` (0,2,1) 写在 `.app-nav a:hover` 之后；
+`.sidebar ul li.active > a` (0,2,3) 写在 `.sidebar ul li a:hover` 之后），第一处是
+书名压根没有配套的 `:hover`（全站那条 `a:hover` 只有 (0,1,1)，被
+`.sidebar .app-name-link` (0,2,0) 吃掉）。静态扫选择器一条都发现不了：选择器都在场。
+
+口径两条，都从现场派生，不写死清单（写死的 KINDS 列表会在第二个没人认领的可交互
+元素落地当天静默漏检）：
+ 1. 候选集 = 页面上当下真的在场的每个 `a[href] / button / summary / [role=button]`
+    （尺寸<2px、display:none、visibility:hidden、pointer-events:none、
+      祖先 aria-hidden 的都不算在场——量不到就是量不到）。
+ 2. 去重键 = 元素自己的**静息计算样式签名** + 标签名与类名。同签名 ⇒ 同一批规则
+    命中它，所以每种签名只需真悬停一次代表；代表在悬停前重读一次签名核对没漂。
+
+档位：390 触屏档不量悬停——tap 之后粘滞的 :hover 不是反馈通道，键盘那一侧的可辨性
+归上面的焦点环走查。1680 档不是富裕而是必需：`.page-toc` 在 min-width:1600px 之前
+一直 display:none，只跑 1280/1440 的口径对整条右侧目录是失明的（目录当前项那一条
+零反馈就只量得到 1680）。
+"""
+
+HOVER_VIEWS = [(1280, 900), (1680, 950)]
+# 变异模式只留 1280：P20/P21 打的是侧栏与顶栏那两条规则，1680 那一族（右侧目录）
+# 与它们走的是同一支判据；目录那一支的真 RED 证据由 2026-09-25 的基线跑给出
+# （a.toc-h3 active「一次红跑的完整经过」=零反馈），日常全量跑覆盖它的绿。
+HOVER_MUT_VIEWS = [(1280, 900)]
+HOVER_SELECTOR = 'a[href], button, summary, [role="button"]'
+# 实测唯一能把 :hover 链清成 0 的落点：(0,0)、(3,892)、(640,450) 都会留下
+# html/body/封面在悬停链里，而负坐标下 querySelectorAll(':hover') 返回空。
+# 停靠点失效的后果不是"少测一站"而是"静息签名天生带悬停态"——同一元素在别的路由
+# 按静息态入键就报漂移，撤开指针后又必然不等，两条都是量具自己造的假案。
+HOVER_PARK = (-10, -10)
+HOVER_SIG_FIELDS = ["color", "background", "border", "outline", "opacity", "shadow",
+                    "fontSize", "fontWeight", "decoration", "transform"]
+# background 进签名（去重要它）但不进"变化集"：判据看的是**合成后**的底——半透明底
+# 要沿祖先链叠出来才看得见，直接比 computed backgroundColor 会把"换了个同样压不出
+# 色的半透明"当成反馈。
+HOVER_CH = {"color": "字色", "border": "边框", "outline": "描边", "opacity": "透明度",
+            "shadow": "阴影", "fontSize": "字号", "fontWeight": "字重",
+            "decoration": "下划线", "transform": "位移/缩放"}
+HOVER_ORDER = ["字色", "合成底", "边框", "描边", "透明度", "阴影", "字号", "字重",
+               "下划线", "位移/缩放"]
+
+# 边框/描边只登记"看得见"的那部分：宽度为 0 的边，颜色换了也看不见，一律记 '0'。
+# 否则 hover 里一句 border-top-color 改变（而 width 仍是 0）会被算成反馈。
+# 边框/描边只登记"看得见"的那部分，但两者的"看得见"不是一回事：
+#  · 边框：CSS 规定 border-style:none 时 border-width 计算值就是 0 → 按宽门控即可。
+#  · 描边：Chrome 在 outline-style:none 时仍把 outline-width 报成 medium(3px)，
+#          而 outline-color 的初值是 currentColor——于是"字色一变、这条根本画不出来的
+#          描边也跟着变色"会被当成反馈。P21 第一次跑就是这么混进「变=字色/描边」的。
+#          所以描边必须按 **style** 门控，宽度不参与判断。
+HOVER_SIG_JS = r"""(function (e) {
+  var cs = getComputedStyle(e), sides = ['Top', 'Right', 'Bottom', 'Left'], b = [];
+  for (var j = 0; j < 4; j++) {
+    var w = parseFloat(cs['border' + sides[j] + 'Width']) || 0;
+    b.push(w > 0 ? cs['border' + sides[j] + 'Color'] + '@' + w : '0');
+  }
+  var ring = (cs.outlineStyle === 'none' || cs.outlineStyle === 'hidden')
+    ? '0' : cs.outlineColor + '@' + (parseFloat(cs.outlineWidth) || 0);
+  return [cs.color, cs.backgroundColor, b.join('~'), ring,
+          cs.opacity, cs.boxShadow, cs.fontSize, cs.fontWeight,
+          cs.textDecorationLine, cs.transform].join('|');
+})"""
+
+HOVER_LAYERS = """layers: (function () { var a = [];
+            for (var n = e; n && n.nodeType === 1; n = n.parentElement) {
+              a.push(getComputedStyle(n).backgroundColor); if (n === document.documentElement) break; }
+            return a; })()"""
+
+HOVER_CHAIN_JS = ("(function(){var n=document.querySelectorAll(':hover');"
+                  "return n.length ? n[n.length-1].tagName.toLowerCase()+'.'+"
+                  "(typeof n[n.length-1].className==='string'?n[n.length-1].className:'')"
+                  ".trim().slice(0,18) : '0'})()")
+
+
+def _hover_tmpl(s: str) -> str:
+    """@@SEL@@ / @@SIG@@ 以**源码**内嵌进表达式：签名函数 json 传过去就成字符串了。"""
+    return (s.replace("@@SEL@@", json.dumps(HOVER_SELECTOR))
+            .replace("@@SIG@@", HOVER_SIG_JS))
+
+
+HOVER_COLLECT_JS = _hover_tmpl(r"""(function () {
+  var sel = @@SEL@@, sigOf = @@SIG@@;
+  var els = [].slice.call(document.querySelectorAll(sel));
+  var out = [], seen = {};
+  for (var i = 0; i < els.length; i++) {
+    var e = els[i], sig = sigOf(e), cs = getComputedStyle(e), r = e.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) continue;
+    if (cs.display === 'none' || cs.visibility === 'hidden' || cs.pointerEvents === 'none') continue;
+    if (e.closest('[aria-hidden="true"]')) continue;
+    var key = e.tagName.toLowerCase() + '.' +
+      (typeof e.className === 'string' ? e.className : '').trim().replace(/\s+/g, '.') + '#' + sig;
+    if (seen[key] !== undefined) { out[seen[key]].n++; continue; }
+    seen[key] = out.length;
+    out.push({key: key, i: i, n: 1, sig: sig,
+              who: e.tagName.toLowerCase() +
+                   '.' + (typeof e.className === 'string' ? e.className : '').trim().slice(0, 26),
+              txt: (e.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 14)});
+  }
+  return {matched: els.length, entries: out};
+})()""")
+
+# 已经在视口里就别滚：scrollIntoView 会把正文滚一段，而右侧目录的 .active 是滚动监听
+# 现写的——为一个本来就看得见的元素去滚，等于亲手把要量的那条改掉。
+HOVER_AT_JS = _hover_tmpl(r"""(function (i) {
+  var e = [].slice.call(document.querySelectorAll(@@SEL@@))[i];
+  var sigOf = @@SIG@@;
+  if (!e) return {gone: true};
+  var r0 = e.getBoundingClientRect();
+  var vis = r0.top >= 0 && r0.bottom <= innerHeight && r0.left >= 0 && r0.right <= innerWidth;
+  if (!vis) e.scrollIntoView({block: 'center', inline: 'nearest'});
+  var r = e.getBoundingClientRect();
+  var x = r.left + Math.min(r.width / 2, 44), y = r.top + r.height / 2;
+  var top = document.elementFromPoint(x, y);
+  return {x: Math.round(x), y: Math.round(y), sig: sigOf(e), hovered: e.matches(':hover'),
+          occluded: !(top === e || e.contains(top) || (top && top.contains(e))),
+          topWho: top ? (top.tagName.toLowerCase() + '.' +
+                         (typeof top.className === 'string' ? top.className : '').trim().slice(0, 18)) : null,
+          """ + HOVER_LAYERS + r"""};
+})""")
+
+HOVER_READ_JS = _hover_tmpl(r"""(function (i) {
+  var e = [].slice.call(document.querySelectorAll(@@SEL@@))[i];
+  var sigOf = @@SIG@@;
+  if (!e) return {gone: true};
+  return {sig: sigOf(e), hovered: e.matches(':hover'),
+          """ + HOVER_LAYERS + r"""};
+})""")
+
+
+def hover_at(i: int) -> str:
+    return HOVER_AT_JS + f"({int(i)})"
+
+
+def hover_read(i: int) -> str:
+    return HOVER_READ_JS + f"({int(i)})"
+
+
+def hover_sig_map(sig: str):
+    """签名串 → {字段名: 值}；列数不符即 None（读数不可比，不许当成"没变化"）。"""
+    parts = (sig or "").split("|")
+    if len(parts) != len(HOVER_SIG_FIELDS):
+        return None
+    return dict(zip(HOVER_SIG_FIELDS, parts))
+
+
+RGBA4 = re.compile(r"rgba?\(([^)]+)\)")
+
+
+def rgba4(css: str):
+    m = RGBA4.search(css or "")
+    if not m:
+        return None
+    p = [float(x) for x in m.group(1).replace("/", ",").split(",")]
+    while len(p) < 4:
+        p.append(1.0)
+    return p[:4]
+
+
+def hover_composite(layers: list) -> tuple[int, int, int]:
+    """把元素到 <html> 的底色按 alpha 叠出来——判的是画出来的那层底，不是声明值。
+    读不出数值的层按全透明处理（等价于"这一层不上色"），不拿 None 去比距离。"""
+    acc = [255.0, 255.0, 255.0]
+    for css in reversed(layers or []):
+        p = rgba4(css) or [255.0, 255.0, 255.0, 0.0]
+        r, g, b, a = p
+        acc = [a * v + (1 - a) * c for v, c in ((r, acc[0]), (g, acc[1]), (b, acc[2]))]
+    return tuple(round(v) for v in acc)  # type: ignore[return-value]
+
+
+def hover_px(v: str) -> float:
+    m = re.search(r"[\d.]+", v or "")
+    return float(m.group(0)) if m else 0.0
+
+
+def hover_floor(fs_px: float, fw: float) -> float:
+    """大字（≥24px，或 ≥18.66px 且字重 ≥700）走 3.0，其余走 4.5——
+    和上面的正文对比度同一把尺，不另立一套。"""
+    return MIN_LARGE_RATIO if (fs_px >= 24 or (fs_px >= 18.66 and fw >= 700)) \
+        else MIN_TEXT_RATIO
+
+
+def hover_edge_seen(v: str) -> str:
+    """边框/描边字段（"色@宽"，四边用 ~ 分隔）再门一次：**宽度为 0 的边看不见**，
+    一律归成 '0'；宽度按浮点归一，"rgb(1, 2, 3)@3" 与 "@3.0" 是同一条边。
+    JS 端已经这么门控了，判据还要再门一遍——不信任编码器是这条闸的规矩：
+    换人写签名、或者签名从别处来，"给一条宽 0 的边换个颜色"就会伪装成反馈。
+    （描边的"画不画得出来"由 style 决定，宽度看不出来，那一半只能在 JS 侧门控——
+      见 HOVER_SIG_JS 的注释。）"""
+    out = []
+    for side in (v or "").split("~"):
+        s = side.strip()
+        color, at, w = s.rpartition("@")
+        if not at or not s:
+            out.append("0" if s in ("", "0") else s)
+            continue
+        m = re.search(r"[\d.]+", w)
+        wide = float(m.group(0)) if m else 0.0
+        out.append(f"{color}@{wide}" if wide > 0 else "0")
+    return "~".join(out)
+
+
+def judge_hover(recs: list[dict], label: str) -> list[str]:
+    """纯函数：把 hover_walk 的记录换成失败清单。可注入，所以能喂任何样本——
+    落空／零反馈／悬停后不可读／读数不可比这四支（外加"宽 0 的边换色不算反馈"那类
+    编码不诚实的分支）由 hover_selftest() 用合成记录各走一次，另有七支干净样本做假阳对照。"""
+    fails: list[str] = []
+    for r in recs:
+        who = f"{r['who']}「{r['txt']}」@{r['path'] or '首页'}"
+        rs, hs = hover_sig_map(r.get("rest")), hover_sig_map(r.get("hov"))
+        if rs is None or hs is None:
+            fails.append(f"[悬停·{label}] {who} 签名列数与字段表不符"
+                         f"（{len((r.get('rest') or '').split('|'))} / "
+                         f"{len((r.get('hov') or '').split('|'))} vs {len(HOVER_SIG_FIELDS)}）"
+                         f"——判据不能建立在自己没读到的列上，这一站不计入通过")
+            continue
+        ch = []
+        for f in HOVER_SIG_FIELDS:
+            if f not in HOVER_CH:
+                continue
+            a, c = rs[f], hs[f]
+            if f in ("border", "outline"):
+                a, c = hover_edge_seen(a), hover_edge_seen(c)
+            if a != c:
+                ch.append(HOVER_CH[f])
+        if r["ib"] != r["hb"]:
+            ch.append("合成底")
+        ch.sort(key=HOVER_ORDER.index)
+        hc = rgb_of(hs["color"])
+        if hc is None:
+            fails.append(f"[悬停·{label}] {who} 悬停后字色 {hs['color']!r} 读不出数值"
+                         f"——读数不可比，这一站不计入通过")
+            continue
+        need = hover_floor(hover_px(hs["fontSize"]), hover_px(hs["fontWeight"]))
+        rr = round(contrast_rgb(hc, r["hb"]), 2)
+        if not r.get("hovered"):
+            fails.append(f"[悬停·{label}] {who} 指针落在 ({r.get('x')},{r.get('y')}) 却没触发 "
+                         f":hover——这一站作废，不能据此说它没反馈")
+            continue
+        if not ch:
+            fails.append(f"[悬停·{label}] {who} 悬停后字色、合成底、边框、描边、透明度、阴影、"
+                         f"字号、字重、下划线、位移全不变——指针扫过去没有任何反馈"
+                         f"（静息签名 …{r['rest'][-44:]}）")
+            continue
+        if rr < need:
+            fails.append(f"[悬停·{label}] {who} 悬停后字对底 {rr}:1 < {need}:1"
+                         f"（变={'/'.join(ch)}，前景 {hs['color']} 底色 rgb{r['hb']}）"
+                         f"——反馈有了，但字反而糊了")
+    return fails
+
+
+def hover_worst(recs: list[dict]):
+    """读数（不是判据）：这批站里最紧的一条"悬停后字对底"。过/不过是一个比特，
+    余量才告诉下一轮还剩多少可花。"""
+    worst = None
+    for r in recs:
+        hs = hover_sig_map(r.get("hov"))
+        hc = rgb_of(hs["color"]) if hs else None
+        if hc is None:
+            continue
+        rr = round(contrast_rgb(hc, r["hb"]), 2)
+        if worst is None or rr < worst[0]:
+            worst = (rr, f"{r['who']}「{r['txt']}」@{r['path'] or '首页'}")
+    return worst or (None, "")
+
+
+def hover_selftest() -> None:
+    """悬停判据的自证：七支干净样本不许报红（含一支"同一条边换写法"的假阳对照），
+    七支坏样本各报自己那一条。这些坏样本在今天的真页面上都不犯，只能在这里走到——
+    不在这里走，就等于没有判据。尤其要紧的是那七支干净样本：一个把两态都喂成同一个
+    dict 的实现会永远报零反馈，而永远报红的闸第一天就会被当成噪声关掉。
+    唯一不在这里走到的是"描边可见性按 style 门控"那一半——它是 JS 侧的编码，
+    合成记录进不了浏览器；它的证据是 P21 的真报红正文（变=字色，不带描边）。"""
+    def sig(**over):
+        base = {"color": "rgb(30, 28, 25)", "background": "rgba(0, 0, 0, 0)",
+                "border": "0~0~0~0", "outline": "0", "opacity": "1", "shadow": "none",
+                "fontSize": "14px", "fontWeight": "400", "decoration": "none",
+                "transform": "none"}
+        base.update(over)
+        return "|".join(base[f] for f in HOVER_SIG_FIELDS)
+
+    def rec(rest=None, hov=None, hovered=True, ib=(247, 245, 240), hb=None):
+        # hb 默认与 ib 相等：不然每条样例都自带一次"合成底变了"，"两态完全相同"
+        # 这一支就永远走不到——第一版自证正是这样把该红的样例洗绿的。
+        return {"who": "a.x", "txt": "示例", "path": "README", "n": 1,
+                "rest": rest or sig(), "hov": hov if hov is not None else sig(),
+                "hovered": hovered, "ib": ib, "hb": ib if hb is None else hb,
+                "x": 40, "y": 30}
+
+    cases = [
+        ("干净：字色往深一档且仍可读",
+         rec(hov=sig(color="rgb(31, 90, 72)")), []),
+        ("干净：只换合成底",
+         rec(hb=(233, 230, 222)), []),
+        ("干净：只有阴影变（阴影/位移也是反馈）",
+         rec(hov=sig(shadow="rgba(0, 0, 0, 0.24) 0px 2px 8px 0px")), []),
+        ("干净：只有宽 3px 的左边框上色",
+         rec(hov=sig(border="0~0~0~rgb(43, 113, 89)@3")), []),
+        ("干净：只有描边画得出来→收掉",
+         rec(rest=sig(outline="rgb(43, 113, 89)@2"), hov=sig(outline="0")), []),
+        ("假阳对照：同一条边换一种写法（@3 → @3.0）不算变化也不算红",
+         rec(rest=sig(border="0~0~0~rgb(43, 113, 89)@3"),
+             hov=sig(color="rgb(31, 90, 72)", border="0~0~0~rgb(43, 113, 89)@3.0")), []),
+        ("坏：两态完全相同", rec(), ["没有任何反馈"]),
+        ("坏：宽 0 的边换颜色（看不见的不算反馈）",
+         rec(rest=sig(border="0~0~0~0"), hov=sig(border="0~0~0~rgb(43, 113, 89)@0")),
+         ["没有任何反馈"]),
+        ("坏：指针落空", rec(hov=sig(color="rgb(31, 90, 72)"), hovered=False),
+         ["没触发 :hover"]),
+        ("坏：hover 把字压向底色",
+         rec(hov=sig(color="rgb(214, 208, 196)"), hb=(247, 245, 240)), ["字反而糊了"]),
+        ("干净：26px 大字走 3.0 那把尺（4.27:1 放行；若误用 4.5 就是假红）",
+         rec(hov=sig(color="rgb(122, 116, 105)", fontSize="26px"), hb=(247, 245, 240)), []),
+        ("坏：26px 大字但只有 2.63:1 → 仍低于大字地板",
+         rec(hov=sig(color="rgb(158, 152, 141)", fontSize="26px"), hb=(247, 245, 240)),
+         ["字反而糊了"]),
+        ("坏：签名列数不符", rec(rest="a|b|c"), ["列数与字段表不符"]),
+        ("坏：字色读不出数值", rec(rest=sig(color="透明"), hov=sig(color="transparent")),
+         ["读不出数值"]),
+    ]
+    bad: list[str] = []
+    for name, r, expect in cases:
+        got = judge_hover([r], "自证")
+        for needle in expect:
+            if not any(needle in f for f in got):
+                bad.append(f"坏样本「{name}」没有报出「{needle}」：{got[:1]}")
+        if expect and not got:
+            bad.append(f"坏样本「{name}」零报红")
+        if not expect and got:
+            bad.append(f"干净样本「{name}」被报红：{got[0]}")
+    if hover_worst([rec(hov=sig(color="rgb(31, 90, 72)"))])[0] is None:
+        bad.append("hover_worst 对一条正常记录交回 None——读数没实现")
+    if hover_worst([])[0] is not None:
+        bad.append("hover_worst 对空清单交回了数值")
+    if bad:
+        raise SystemExit("悬停判据自证未过（这条闸还没有能力报它该报的红）：\n  "
+                         + "\n  ".join(bad))
+
+
+def hover_quiesce(b: CDP, timeout: float = 6.0) -> bool:
+    """等页面没有一个在跑的过渡/动画。本仓没有循环动画（实测：落定后
+    document.getAnimations() 恒为 0），而 theme.css 最长 transition 是 .4s——
+    不静默就取签名，取到的是过渡中途的值，"撤开后仍停在悬停态"会假红一片。
+    不猜时长，等它自己停。"""
+    return b.wait_for("document.getAnimations().length === 0", timeout)
+
+
+def hover_park(b: CDP):
+    """把指针移出视口并等风格落定 → (是否静默, :hover 链长度)。
+    先睡 0.12s：过渡要等下一次样式重算才登记进 getAnimations()，不等就查会读到
+    "还没开始"的 0，把在跑的过渡当成已停。"""
+    b.call("Input.dispatchMouseEvent",
+           {"type": "mouseMoved", "x": HOVER_PARK[0], "y": HOVER_PARK[1]})
+    time.sleep(0.12)
+    if not hover_quiesce(b):
+        return False, -1
+    return True, b.js("document.querySelectorAll(':hover').length")
+
+
+def hover_settled(b: CDP, i: int):
+    """定位 → 等静默 → 再读一次；返回 None 表示这一站取不到可信的静息终态。
+    两次读是必要的：滚进视口自己会触发揭示过渡。"""
+    p = b.js(hover_at(i))
+    if not p or p.get("gone") or not hover_quiesce(b):
+        return None
+    p = b.js(hover_at(i))
+    return None if (not p or p.get("gone")) else p
+
+
+def hover_walk(b: CDP, base: str, routes: list[str], theme: str, w: int,
+               fails: list[str], stats: dict) -> None:
+    """一档视口×主题走一遍全站：每种静息签名真悬停一次代表，读数攒成记录交给
+    judge_hover。这里只负责"量"，判在纯函数那一侧。"""
+    done: set[str] = set()
+    recs: list[dict] = []
+    per_key: dict[str, int] = {}
+    want = "dark" if theme == "dark" else ""
+    for path in routes:
+        label = f"{w}px/{theme}"
+        b.navigate(f"{base}/#/{quote(path)}")
+        why = dismiss_cover(b, path)
+        if why:
+            fails.append(f"[悬停·{label}] {path}：{why}")
+            continue
+        b.wait_for("document.querySelectorAll(%s).length > 0" % json.dumps(HOVER_SELECTOR), 20)
+        b.wait_for("!document.querySelector('section.cover.show')", 12)
+        settle(b)
+        if (b.js("document.documentElement.dataset.theme") or "") != want:
+            b.js("document.getElementById('btn-theme').click()")
+            b.wait_for("(document.documentElement.dataset.theme||'')===%s"
+                       % json.dumps(want), 10)
+            settle(b)
+            stats["clicks"] += 1
+        if (b.js("document.documentElement.dataset.theme") or "") != want:
+            fails.append(f"[悬停·{label}] {path}：档位没换过去，这一页的悬停读数作废")
+            continue
+        quiet, chain = hover_park(b)
+        if not quiet:
+            fails.append(f"[悬停·{label}] {path}：撤开指针 6s 后 getAnimations() 仍非空——"
+                         f"签名取到的是过渡中途的值，这一页本轮读数作废")
+            continue
+        if chain != 0:
+            fails.append(f"[悬停·{label}] {path}：停靠点没能把 :hover 链清成 0（现存 {chain} 个，"
+                         f"最内层 {b.js(HOVER_CHAIN_JS)}）——静息签名不可信，这一页作废")
+            continue
+        got = b.js(HOVER_COLLECT_JS) or {}
+        entries = got.get("entries") or []
+        if not entries:
+            fails.append(f"[悬停·{label}] {path}：在场可交互元素为 0（匹配到 "
+                         f"{got.get('matched')} 个全被判为不在场）——分母空了，这一页没被看过")
+            continue
+        stats["hoverMatched"] += got.get("matched", 0)
+        stats["hoverEls"] += sum(e["n"] for e in entries)
+        for ent in entries:
+            per_key[ent["key"]] = per_key.get(ent["key"], 0) + ent["n"]
+            if ent["key"] in done:
+                continue
+            done.add(ent["key"])
+            pre = hover_settled(b, ent["i"])
+            if pre is None:
+                fails.append(f"[悬停·{label}] {ent['who']}「{ent['txt']}」@{path}：滚进视口后取不到"
+                             f"静息的终态读数（节点消失或 6s 内动画没停）——这一站作废")
+                continue
+            if pre["hovered"]:
+                fails.append(f"[悬停·{label}] {ent['who']}「{ent['txt']}」@{path}：静息读数本身带 "
+                             f":hover（停靠点失效）——不能据此判它没反馈")
+                continue
+            # 去重键会漂的元素：右侧目录的 .active 由 scroll 监听现写。这类不能直接作废——
+            # 按钉死后的签名换键重测一次；撞上已量过的就不重复量（但要数出来），
+            # 两次仍不一致才判红。
+            tries = 0
+            while pre["sig"] != ent["sig"] and tries < 2:
+                tries += 1
+                k2 = ent["key"].rsplit("#", 1)[0] + "#" + pre["sig"]
+                if k2 in done:
+                    stats["hoverSkips"] += 1
+                    stats["hoverSkipWho"].append(f"{ent['who']}「{ent['txt']}」@{path}")
+                    pre = None
+                    break
+                done.add(k2)
+                ent = dict(ent, key=k2, sig=pre["sig"])
+                pre = hover_settled(b, ent["i"]) or pre
+            if pre is None:
+                continue
+            if pre["sig"] != ent["sig"]:
+                fails.append(f"[悬停·{label}] {ent['who']}「{ent['txt']}」@{path}：静息签名在定位后"
+                             f"换了 {tries} 次仍对不上（有东西在持续改它的样式）——这一站作废")
+                continue
+            if pre["occluded"]:
+                fails.append(f"[悬停·{label}] {ent['who']}「{ent['txt']}」@{path}：落点被 "
+                             f"{pre['topWho']} 挡住——指针根本落不到它身上，这一站作废")
+                continue
+            b.call("Input.dispatchMouseEvent",
+                   {"type": "mouseMoved", "x": pre["x"], "y": pre["y"]})
+            time.sleep(0.12)                    # 给过渡一次登记的机会，再等它停
+            hover_quiet = hover_quiesce(b)
+            hov = b.js(hover_read(ent["i"]))
+            back_quiet, _ = hover_park(b)
+            back = b.js(hover_read(ent["i"]))
+            stats["hoverHovers"] += 1
+            if not hov or hov.get("gone"):
+                fails.append(f"[悬停·{label}] {ent['who']}「{ent['txt']}」@{path}：悬停后节点不见了")
+                continue
+            if not hover_quiet:
+                fails.append(f"[悬停·{label}] {ent['who']}「{ent['txt']}」@{path}：悬停后 6s 过渡"
+                             f"仍未停——悬停终态取不到，这一站作废")
+                continue
+            if not back_quiet:
+                fails.append(f"[悬停·{label}] {ent['who']}「{ent['txt']}」@{path}：撤开指针后 6s "
+                             f"过渡仍未停——无法判它有没有回到静息态")
+            elif back and not back.get("gone") and back["sig"] != pre["sig"]:
+                fails.append(f"[悬停·{label}] {ent['who']}「{ent['txt']}」@{path}：指针撤开后仍停在"
+                             f"悬停态——它回不去了，这一站「量一次少一次」没人补")
+            recs.append({"who": ent["who"], "txt": ent["txt"], "path": path, "n": ent["n"],
+                         "rest": pre["sig"], "hov": hov["sig"], "hovered": hov["hovered"],
+                         "ib": hover_composite(pre["layers"]), "hb": hover_composite(hov["layers"]),
+                         "x": pre["x"], "y": pre["y"]})
+            fails += judge_hover(recs[-1:], label)
+    stats["hoverSigs"] += len(recs)
+    stats["hoverViewsSeen"].append(
+        f"{len(recs)}种/{sum(per_key.values())}个/{w}/{theme}")
+    r = hover_worst(recs)
+    if r[0] is not None and (stats["hoverWorst"] is None or r[0] < stats["hoverWorst"][0]):
+        stats["hoverWorst"] = (r[0], f"{label} {r[1]}")
+    for k, n in per_key.items():
+        stats["hoverLedger"][f"{w}/{theme} {k}"] = n
+
+
+def hover_pass(base: str, routes: list[str], themes: list[str],
+               views: list, fails: list[str], stats: dict) -> None:
+    """全站一趟（自己开 CDP：视口档与主循环不同）。"""
+    for (w, h) in views:
+        with CDP(w, h) as b:
+            b.set_viewport(w, h, mobile=False)
+            for theme in themes:
+                hover_walk(b, base, routes, theme, w, fails, stats)
+
+
 def judge_effect(rows: list[dict], label: str) -> list[str]:
     """纯函数：算出来的值必须等于**同一页**上那个令牌的值。"""
     fails: list[str] = []
@@ -1401,15 +1911,18 @@ def effect_selftest() -> None:
 def audit(base: str, pages: list[str], themes: list[str],
           shot_dir: Path | None = None, report: bool = False,
           viewports: list[tuple[int, int, bool]] | None = None,
-          focus: dict | None = None) -> tuple[list[str], dict]:
+          focus: dict | None = None,
+          hover_views: list[tuple[int, int]] | None = None) -> tuple[list[str], dict]:
     """逐页逐主题量对比度。返回（不达标清单，自证统计）。
-    focus=None 时用 FOCUS_SAMPLE；变异自检传一份更小的样本（只需真走到那一条判据）。"""
+    focus=None 时用 FOCUS_SAMPLE；变异自检传一份更小的样本（只需真走到那一条判据）。
+    hover_views=None 时用 HOVER_VIEWS；变异自检只留 1280（见 HOVER_MUT_VIEWS 的说明）。"""
     if "dark" in themes and "light" not in themes:
         raise SystemExit("只跑深档就没有浅档基线，"
                          "「深档真的换了色」无法自证——请带上 light 一起跑")
     if themes[0] != "light":
         raise SystemExit("主题顺序必须以 light 开头，否则深档找不到同页同视口的基线")
     fs = focus or FOCUS_SAMPLE
+    hover_routes: list[str] | None = None
     fails: list[str] = []
     worst: list[tuple[float, str]] = []
     stats = {"pages": 0, "sampled": 0, "walker": 0, "uncovered": 0, "figBlocks": 0,
@@ -1417,11 +1930,15 @@ def audit(base: str, pages: list[str], themes: list[str],
              "pseudo": 0, "pseudoMobilePages": 0, "via": {},
              "focusWalks": 0, "focusStops": 0, "focusScroller": 0, "focusNulls": 0,
              "focusWorst": None, "focusWho": "", "focusClip": 1.0,
-             "focusSecs": 0.0, "focusDistinct": [], "effectRows": 0}
+             "focusSecs": 0.0, "focusDistinct": [], "effectRows": 0,
+             "hoverSigs": 0, "hoverEls": 0, "hoverMatched": 0, "hoverHovers": 0,
+             "hoverSkips": 0, "hoverSkipWho": [], "hoverViewsSeen": [],
+             "hoverWorst": None, "hoverLedger": {}}
     for w, h, mobile in (viewports or VIEWPORTS):
         with CDP(w, h) as b:
             b.set_viewport(w, h, mobile=mobile)
             route_list = pages if pages != ["ALL"] else routes_two_ways(b, base)
+            hover_routes = route_list   # 悬停口径复用量由两条互证过的路由清单
             light_tokens: dict[str, dict] = {}
             for theme in themes:
                 for path in route_list:
@@ -1582,6 +2099,22 @@ def audit(base: str, pages: list[str], themes: list[str],
                                                   or ratio < stats["focusWorst"]):
                             stats["focusWorst"], stats["focusWho"] = ratio, f"{label} {who}"
                         stats["focusClip"] = min(stats["focusClip"], clip)
+    # 悬停可辨性：整站一趟（自己开 1280/1680 两档 CDP，与主循环的档位不同）。
+    # 放在主循环之后：它要真点鼠标，会把悬停态留在页面上，先量完对比度再动指针。
+    if hover_routes is None:
+        fails.append("[自证] 主循环一档都没跑到（viewports 传空了？）——悬停口径拿不到路由清单，"
+                     "这一轮的绿读数不含悬停可辨性")
+    else:
+        hover_pass(base, hover_routes, themes, hover_views or HOVER_VIEWS, fails, stats)
+    if stats["hoverSigs"] == 0:
+        fails.append(f"[自证] 悬停走查一种签名都没量到（在场元素 {stats['hoverEls']} 个、"
+                     f"匹配 {stats['hoverMatched']} 个）——绿读数不含悬停可辨性")
+    if stats["hoverSigs"] and stats["hoverHovers"] < stats["hoverSigs"]:
+        fails.append(f"[自证] 签名 {stats['hoverSigs']} 种却只真悬停 {stats['hoverHovers']} 次——"
+                     f"有签名没被指针碰过")
+    if stats["hoverSkips"]:
+        fails.append(f"[自证] {stats['hoverSkips']} 站因换键撞上已量过的签名而没重复量："
+                     f"{'、'.join(stats['hoverSkipWho'][:6])}——分母里少了这几站，看得见")
     if report:
         worst.sort()
         print("[对比度最低的前 25 对]")
@@ -1795,6 +2328,22 @@ P19_OLD = _TABLE_ANCHOR
 P19_NEW = ("    var AINSE_UNREGISTERED_TINT = '#123456';  // 故意留下的第二套配色\n"
            + _TABLE_ANCHOR)
 
+# ============================== 悬停可辨性的两条变异 ==============================
+# 载荷全部现取：锚必须恰好命中当前 theme.css 里那条书名 hover，取不到就当场停下——
+# 变异打空（锚漂到别处或命中 0 次）的表现是"判据未被捕获"的假红，比没测更糟。
+_HOVER_TITLE_BLOCK = ("\n.sidebar .app-name-link:hover {\n"
+                      "  color: var(--c-accent-hover);\n}")
+if _theme_text.count(_HOVER_TITLE_BLOCK) != 1:
+    raise SystemExit(f"P20/P21 的书名 hover 锚在 theme.css 里出现 "
+                     f"{_theme_text.count(_HOVER_TITLE_BLOCK)} 次（需要恰好 1 次）——"
+                     "那条规则改名或换行了，载荷必须跟着改")
+_hover_bad = _LIGHT0.get("--c-border")
+if _hover_bad is None:
+    raise SystemExit("P21 需要一个合法但读不清的令牌色当坏悬停色，但 --c-border 查无此键")
+if contrast_rgb(rgb_of(_hover_bad), rgb_of(_LIGHT0["--c-desk"])) >= MIN_TEXT_RATIO:
+    raise SystemExit(f"P21 的坏悬停色 {_hover_bad} 对纸底仍过地板——坏样本不坏，换一个令牌")
+P21_NEW = _HOVER_TITLE_BLOCK.replace("var(--c-accent-hover)", "var(--c-border)")
+
 MUTATIONS = [
     ("P1 正文灰到看不清（--c-text-3 提到接近纸色）", "theme.css",
      "  --c-text-3:     #6e675c;", "  --c-text-3:     #ded9cf;", "正文对比度"),
@@ -1874,6 +2423,14 @@ MUTATIONS = [
      P18_OLD, P18_NEW, "抄件宿主"),
     ("P19 兜底表外冒出一格没人认领的色抄件（登记清单漏了第三个读者）", "index.html",
      P19_OLD, P19_NEW, "未登记"),
+    # 悬停可辨性两条支各配一个坏样本，都打在同一条真规则上（书名那条 hover 是本轮
+    # 由真 RED 换来的：2026-09-25 基线跑里 a.app-name-link「AI 原生软件工程」=零反馈，
+    # 浅/深 × 1280/1680 各一次）。P20 走「没有任何反馈」，P21 走「字反而糊了」——
+    # 少任一支，另一支就是没人走过的红支。
+    ("P20 删掉书名的 :hover（点得动却扫不出反馈）", "theme.css",
+     _HOVER_TITLE_BLOCK, "", "没有任何反馈"),
+    ("P21 书名 hover 字色改成边框灰（反馈有了，字糊了）", "theme.css",
+     _HOVER_TITLE_BLOCK, P21_NEW, "字反而糊了"),
 ]
 
 
@@ -1906,7 +2463,8 @@ def mutation_fails(tmp: Path) -> list[str]:
     fails = static_fails(tmp / "theme.css", tmp)[0]
     base, shutdown = serve(tmp)
     try:
-        aud, _ = audit(base, MUT_PAGES, ["light", "dark"], viewports=MUT_VIEWS, focus=MUT_FOCUS)
+        aud, _ = audit(base, MUT_PAGES, ["light", "dark"], viewports=MUT_VIEWS,
+                   focus=MUT_FOCUS, hover_views=HOVER_MUT_VIEWS)
     finally:
         shutdown()
     return fails + aud
@@ -1943,6 +2501,7 @@ def static_fails(theme_path: Path = THEME, docs_dir: Path = DOCS) -> tuple:
     lab_selftest()
     focus_selftest()
     effect_selftest()
+    hover_selftest()
     index_literal_selftest()
     light, dark = parse_tokens(theme_path.read_text())
     fails = scan_literal_colors(theme_path.read_text())
@@ -2036,6 +2595,20 @@ def main() -> int:
           f"（地板 FOCUS_MIN_STOPS {FOCUS_MIN_STOPS}）")
     print(f"[生效对账] {len(EFFECT_LEDGER)} 行 × {stats['pages']} 页次 = {stats['effectRows']} 行读数"
           f"（读的是计算值：theme.css 写了不等于页面算出来还是它）")
+    print(f"[悬停可辨性] {' '.join(stats['hoverViewsSeen'])} —— 四档各一趟："
+          f"签名/在场元素/视口/主题；真点鼠标 {stats['hoverHovers']} 次，"
+          f"选择器匹配 {stats['hoverMatched']} 个（含不在场的）")
+    if stats["hoverWorst"]:
+        print(f"            最紧的一条「悬停后字对底」{stats['hoverWorst'][0]:.2f}:1"
+              f"（正文地板 {MIN_TEXT_RATIO}:1 / 大字 {MIN_LARGE_RATIO}:1）："
+              f"{stats['hoverWorst'][1]}")
+    # 台账整张交回：判"哪些可以豁免"要看全量。只看判红清单会把"没进判红清单"
+    # 当成"看过了"——那是分母缺失，不是通过。所以按在场元素数从多到少列前若干行。
+    if stats["hoverLedger"]:
+        print(f"            台账 {len(stats['hoverLedger'])} 行（视口/主题 + 签名键 + 在场数），"
+              f"前 8 行：")
+        for k, n in sorted(stats["hoverLedger"].items(), key=lambda kv: -kv[1])[:8]:
+            print(f"              {n:>7} 个  {k[:112]}")
     for f in fails[:40]:
         print("  ✗", f)
     if len(fails) > 40:

@@ -225,6 +225,14 @@ div.search input:focus-visible {
   font-weight: 600;
 }
 
+/* 「当前所在」这一项也要给指针回应。.app-nav a.active 与 .app-nav a:hover 同为
+   (0,2,1)，靠写在后面赢了优先级，于是「主页」这一条扫过去字色、底、边框一动不动
+   ——第八条「悬停可辨性」在 1280/1680 × 浅/深四个档位各量到一次零反馈。
+   当前项的回应是"整条往深一档"，不是换成兄弟项那套浅底悬停语言。 */
+.app-nav a.active:hover {
+  color: var(--c-accent-hover);
+}
+
 /* ============================== Sidebar ============================== */
 .sidebar {
   position: fixed;
@@ -283,6 +291,14 @@ div.search input:focus-visible {
   border-left-color: var(--c-accent);
 }
 
+/* 同上一条的语言：侧栏的「当前章节」也是 .active (0,2,3) 写在 a:hover (0,2,3) 后面，
+   靠顺序赢掉了悬停——量具在浅/深两档各读到一次零反馈。左边那根 3px 立条跟着字色
+   一起往深一档，回应落在两处而不是一处。 */
+.sidebar ul li.active > a:hover {
+  color: var(--c-accent-hover);
+  border-left-color: var(--c-accent-hover);
+}
+
 /* Top-level section labels */
 /* 分组说明（「《AI 原生软件工程》书稿」「地基（四案例并列）」「配套附录」）：
    Docsify 把裸文本渲染成 li > p / li > strong，任何层级都要读作小标题，
@@ -321,6 +337,15 @@ div.search input:focus-visible {
   font-weight: 800;
   color: var(--c-text);
   letter-spacing: -.02em;
+}
+
+/* 书名是一条链接，却从未有过 :hover：全站那条 `a:hover{color:var(--c-accent-hover)}`
+   特异度只有 (0,1,1)，被上面的 .sidebar .app-name-link (0,2,0) 吃掉，于是指针扫上去
+   字色、底、边框一动不动（量具在浅/深两档各读到一次零反馈）。这里只是把"没有那次
+   特异度相撞"时本该有的回应还给它——跟着全站那一个强调色走；不加底，因为它没有
+   兄弟项那样的 padding，铺底会糊成一条贴着字的带子。 */
+.sidebar .app-name-link:hover {
+  color: var(--c-accent-hover);
 }
 
 /* ============================== Search ==============================
@@ -1863,6 +1888,14 @@ html[data-theme='dark'] kbd { background: var(--c-bg-soft); }
   color: var(--c-accent);
   font-weight: 600;
   border-left-color: var(--c-accent);
+}
+
+/* 右侧目录的当前项同样被顺序赢掉了 .page-toc a:hover（两条都是 (0,2,1)）。
+   这一族只在 ≥1600px 存在（.page-toc 在那之前 display:none），所以量具必须带一档
+   1680 才看得见它——只有 1280/1440 的口径对整条右侧目录是失明的。 */
+.page-toc a.active:hover {
+  color: var(--c-accent-hover);
+  border-left-color: var(--c-accent-hover);
 }
 
 @media (min-width: 1600px) {
