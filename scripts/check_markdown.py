@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Markdown 结构闸：围栏成对、正文不裸写围栏串、HTML 块后必须空行隔开、
 相对 HEAD 不丢小节标题、小节子树不得为空、同文件小节编号不得撞号、
-复跑命令块与守卫脚本全集相等、正文不写裸文件路径、根/docs 双副本逐字节一致。
+复跑命令块与守卫脚本全集相等、正文不写裸文件路径、手稿正文不引用源码行号、
+根/docs 双副本逐字节一致。
 
 Why：Docsify 用 marked 解析，两类破损都不报错、不产生死链，只有渲染后才看得见：
 · 正文里出现三个及以上反引号会被当作代码块起点，该行之后的整页被吞成裸文本
@@ -19,11 +20,14 @@ Why：Docsify 用 marked 解析，两类破损都不报错、不产生死链，�
 第六类是**引用破损**：正文里写着 `./chNN-….md` 这样的裸文件路径——它不是链接（第七条
 `check_links.py` 在 DOM 里找 <a>，找不到它），也不是未落地的语法（第九条泄漏闸管的是星号
 反引号，路径本身被规规矩矩渲染出来了）。全站量到 12 处并已转成真链接（见「正文裸路径闸」）。
+第七类也是**引用破损**，但破的是可对账性：正文写 `第 310 行` 这种源码行号。页面上没有一列
+数字可对照，被引文件增删一行引用就集体漂移；本书的锚是小节号、表行汉字序数、图号，三者都在
+渲染面上可见（见「源文行号引用闸」）。
 所以在提交前用文本闸拦住。
 
 用法：python3 scripts/check_markdown.py            # 校验
       python3 scripts/check_markdown.py --count    # 只报覆盖量
-      python3 scripts/check_markdown.py --selftest # 标题闸＋空节闸＋撞号闸＋守卫清单闸＋裸路径闸；每闸条数由这条命令自己打印
+      python3 scripts/check_markdown.py --selftest # 标题闸＋空节闸＋撞号闸＋守卫清单闸＋裸路径闸＋源文行号闸；每闸条数由这条命令自己打印
 """
 import re
 import sys
@@ -380,6 +384,91 @@ def raw_path_selftest():
     return 0
 
 
+# ---------------------------------------------------------------- 源文行号引用闸
+# 为什么要加这一条：本轮一份交稿物在三个新小节里写了 **214 处** `第 NNN 行` 式引用。
+# 这个读数量在交稿字节上，那些字节随后被本轮改写覆盖，**今天不可复跑**（账记在 DIAGNOSIS
+# 第十二波）；仓库里可复跑的是它的两面：HEAD 那三个文件各 **0 处**，而 HEAD 的第 22 章有
+# **1 处** `第 310 行`——那一处经核对是指对的，这正是本闸要拦的东西：行号可以当场对，
+# 但它对读者不可见、对被引文件的下一次增删毫无抵抗力。这种写法有三重坏：
+# · **读者看不见行号**——Docsify 渲染的是段落，页面上没有一列数字可对照，引用等于自证无人读；
+# · **手抄就会错**——交稿物里那 214 处中有 2 处经核对指错（一处指向空行，一处把 178 行的
+#   原话记成 180 行）；这两处也只能在当场对，对完就再没有机器读者守着；
+# · **它比普通抄件腐得更快**——被引文件每次增删一行，全部引用集体失效。
+# 本书的既有锚是**小节号、表行汉字序数、图号**（`17.4 第③层`／`度量表第五行`／`图 17-2`），
+# 这三者都在渲染面上可见，改稿时也能被人看见。
+# 口径：只扫 `docs/manuscript/*.md` 的**围栏外**正文，认 `第` + 2～4 位数字（可带 `～` 区间）+ `行`。
+# 三条排除各由真实形状撑腰，缺一条就误伤全书：**汉字序数**（`度量表第五行`，全书表行引用的唯一合法写法）、
+# **行数量词**（`36338 行`、`机器人 40 行生成物`，第 22 章与第 6 章的实跑读数）、
+# **围栏内**（示例代码与 stdout 里的 `第 N 行` 是代码内容，不是本书的引用）。
+# 闸外登记：`DIAGNOSIS.md` 与 `STYLE_GUIDE.md` 里都有 `第 NNN 行` 串（前者指台账行位、读者是守卫维护者
+# 而非翻页人；后者是这条规则自己的反面实例）。它们**不在本闸范围内**——这句话写在这里，是为了让
+# "手稿正文 0 处"这个读数不被读成"全仓 0 处"；立闸那一刻全站（73 个 md、含根/docs 两份副本）量到 4 处、
+# 全部在 `DIAGNOSIS.md`，而写下这条规则的文案后来又各加了 2 处，所以那个 4 只在当场成立。
+LINE_REF = re.compile(r"第\s*\d{2,4}(?:\s*[～~]\s*\d{2,4})?\s*行")
+
+
+def line_ref_hits(text):
+    """返回 [(行号, 命中串), …]。口径＝围栏外。纯函数、可注入（真件与桩件走同一条判据）。"""
+    lines = text.splitlines()
+    kinds = heading_kinds(lines)
+    out = []
+    for i, (line, kind) in enumerate(zip(lines, kinds), 1):
+        if kind == "fence":
+            continue
+        for m in LINE_REF.finditer(line):
+            out.append((i, m.group()))
+    return out
+
+
+def manuscript_files():
+    return sorted((DOCS / "manuscript").glob("*.md"))
+
+
+def line_ref_problems():
+    """返回 (问题列表, 扫描文件数, 命中数)。枚举口径塌了就直接中止。"""
+    fs = manuscript_files()
+    if len(fs) < 50:
+        raise SystemExit(f"源文行号闸只扫到 {len(fs)} 个手稿文件（<50）——枚举口径塌了，这条闸不能算通过")
+    problems, hits = [], 0
+    for path in fs:
+        for no, s in line_ref_hits(path.read_text()):
+            hits += 1
+            problems.append(
+                f"{path.relative_to(ROOT)}:{no}: 正文引用源码行号 {s!r} → 页面上没有行号可对照，"
+                f"且被引文件一改就漂 → 改成本节小节号／表行汉字序数／图号"
+            )
+    return problems, len(fs), hits
+
+
+LINE_REF_SELFTEST = [
+    ("真件形状报（第 22 章改锚前那一行的形状）",
+     "那条熵命中还是 `ch07-第2章-人在回路.md` 第 310 行那串高熵串。\n", 1),
+    ("区间引用报（交稿物里的第二种形状）",
+     "端侧字段裁剪清单（第 266～279 行）里有两栏。\n", 1),
+    ("汉字序数的表行引用不报（全书表行锚的唯一合法写法）",
+     "沿用度量表第五行与本表第八格的读法。\n", 0),
+    ("章号与步号不报", "第 27 章的 27.5g 落地第 8 步。\n", 0),
+    ("行数量词不报（实跑读数，第 22 章与第 6 章的形状）",
+     "118 个受检文件、36338 行；机器人 40 行生成物混进来。\n", 0),
+    ("围栏内是代码内容，不报", "```text\n第 310 行: SIG_ID ...\n```\n", 0),
+]
+
+
+def line_ref_selftest():
+    bad = 0
+    for name, text, want in LINE_REF_SELFTEST:
+        got = len(line_ref_hits(text))
+        if got != want:
+            bad += 1
+            print(f"  [✘] {name}：命中 {got} 条（应为 {want}）")
+        else:
+            print(f"  [✔] {name}：命中 {got} 条")
+    if bad:
+        raise SystemExit(f"源文行号闸的自检 {bad} 条不符——判据本身不可信")
+    print("  自检结论：两种真件形状必报，三种合法写法（汉字序数、行数量词、围栏内）各有一支假阳对照。")
+    return 0
+
+
 # ---------------------------------------------------------------- 标题丢失闸
 # 为什么要加这一条（2026-09-24 实测）：本轮用 Edit 改稿时**连着三次**把下一块的
 # 头部一起吃掉了——ch27 少了一段围栏、ch26 少了 `## 21.5` 标题、ch05 少了 `## 3.3` 标题。
@@ -526,7 +615,9 @@ def main():
         rc4 = guard_index_selftest()
         print("[裸路径闸] 正文不写裸文件路径")
         rc5 = raw_path_selftest()
-        return rc1 or rc2 or rc3 or rc4 or rc5
+        print("[源文行号闸] 手稿正文不引用源码行号")
+        rc6 = line_ref_selftest()
+        return rc1 or rc2 or rc3 or rc4 or rc5 or rc6
     problems, total_code, fence_lines = [], 0, 0
     for path in files():
         text = path.read_text()
@@ -545,12 +636,15 @@ def main():
     problems += gi_problems
     raw_problems, raw_scanned, raw_hits = raw_path_problems()
     problems += raw_problems
+    lr_problems, lr_scanned, lr_hits = line_ref_problems()
+    problems += lr_problems
     if "--count" in sys.argv:
         print(f"{len(files())} 个 md 文件 / {fence_lines} 行围栏标记 / {total_code} 行代码块内容"
               f" / {baselined} 个文件有 HEAD 基线可对标题 / 空节闸扫 {scanned} 个文件"
               f" / 撞号闸扫 {sid_scanned} 个手稿文件"
               f" / 守卫清单闸对 {disk_n} 个 scripts/check_*.py（名册列 {listed_n} 个）"
-              f" / 裸路径闸扫 {raw_scanned} 个文件（命中 {raw_hits} 条）。")
+              f" / 裸路径闸扫 {raw_scanned} 个文件（命中 {raw_hits} 条）"
+              f" / 源文行号闸扫 {lr_scanned} 个手稿文件（命中 {lr_hits} 条）。")
         return 0
     if problems:
         print("不通过：")
@@ -564,7 +658,8 @@ def main():
         f"{baselined} 个文件的相对 HEAD 小节标题零丢失；{scanned} 个文件无空小节；"
         f"{sid_scanned} 个手稿文件无小节编号撞号；"
         f"复跑命令块与 {disk_n} 个守卫脚本集合相等；"
-        f"{raw_scanned} 个文件的正文无裸文件路径。结构闸通过。"
+        f"{raw_scanned} 个文件的正文无裸文件路径；"
+        f"{lr_scanned} 个手稿文件的正文无源码行号引用。结构闸通过。"
     )
     return 0
 
