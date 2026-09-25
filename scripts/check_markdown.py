@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Markdown 结构闸：围栏成对、正文不裸写围栏串、HTML 块后必须空行隔开、
 相对 HEAD 不丢小节标题、小节子树不得为空、同文件小节编号不得撞号、
-根/docs 双副本逐字节一致。
+复跑命令块与守卫脚本全集相等、根/docs 双副本逐字节一致。
 
 Why：Docsify 用 marked 解析，两类破损都不报错、不产生死链，只有渲染后才看得见：
 · 正文里出现三个及以上反引号会被当作代码块起点，该行之后的整页被吞成裸文本
@@ -13,11 +13,14 @@ Why：Docsify 用 marked 解析，两类破损都不报错、不产生死链，�
 第四类破损是**同文件撞号**：两条标题共用一个 `N.Nx` 编号（实测：第 23 章曾同时挂着
 两个 `23.4b`、第 24 章挂着两个 `24.9`）。Docsify 按标题文本生成锚点，撞号的两节
 各引用一次就不破链——破的是书：编号从此不能唯一指认一节，改号也没有机器读者会拦。
+第五类不是渲染破损，是**登记破损**：`FIGURE_LIST.md` 的复跑命令块是全书守卫的名册，
+它抄自磁盘上的 `scripts/check_*.py`；新守卫没登记上就永远没有读者，删掉的守卫留在名册上
+就成了一条承诺了却没人执行的命令。判据按集合相等，条数不写进任何文案（见「守卫清单闸」）。
 所以在提交前用文本闸拦住。
 
 用法：python3 scripts/check_markdown.py            # 校验
       python3 scripts/check_markdown.py --count    # 只报覆盖量
-      python3 scripts/check_markdown.py --selftest # 标题闸 6 条 + 空节闸 4 条 + 撞号闸 5 条已知答案自检
+      python3 scripts/check_markdown.py --selftest # 标题闸 6 条 + 空节闸 4 条 + 撞号闸 5 条 + 守卫清单闸 4 条＋两支行首口径判别
 """
 import re
 import sys
@@ -214,6 +217,94 @@ def sid_selftest():
     return 0
 
 
+# ---------------------------------------------------------------- 守卫清单闸
+# 为什么要加这一条（2026-09-26 量命中面之后立的）：第 25 章那轮把「计数只有一个宿主」
+# 用派生收口之后，还剩一个没人量过的同类抄件——`FIGURE_LIST.md` 末尾那条「复跑命令」块
+# 逐条列出了全书的守卫。守卫本身是磁盘上的 `scripts/check_*.py`，清单是它的手抄名册：
+# 第十三轮加进第十三条守卫而忘了登记，这块清单不会破任何现有判据（围栏成对、双副本一致、
+# 小节不撞号全都照绿），而新守卫就此没有读者——它跑不跑全看有没有人记得它存在。
+# 比这更坏的是反向：清单里留着一行已删守卫的命令，下轮照抄就等于承诺了一条不存在的闸。
+# 判据按集合相等做（不是子集、不是计数）：少了报「没登记」，多了报「幽灵」，
+# 条数不写进任何文案——所以这条闸不需要维护它自己的抄件。
+# 口径只认命令行的行首形状 `python3 scripts/check_*.py`：散文里提到脚本名不算登记
+# （否则正文任何举例都会变成假阳），而重复列同一脚本不报（集合语义，判据不罚罗嗦）。
+GUARD_CMD = re.compile(r"^\s*python3 scripts/(check_[a-z_]+\.py)")
+GUARD_LIST_REL = "FIGURE_LIST.md"
+
+
+def guard_cmd_names(text):
+    """从清单文本里取出「命令行形态」出现的守卫脚本名（散文提及不算）。"""
+    return {m.group(1) for line in text.splitlines() if (m := GUARD_CMD.match(line))}
+
+
+def guard_index_problems(listed, disk):
+    """纯函数：名册集合与磁盘集合的差集判定。两边可注入，自检才量得到比较本身。"""
+    problems = []
+    for name in sorted(disk - listed):
+        problems.append(f"{GUARD_LIST_REL}: 守卫 {name} 在磁盘上存在，但复跑命令块里没有它"
+                        f"→ 新闸没有登记，等于没有读者")
+    for name in sorted(listed - disk):
+        problems.append(f"{GUARD_LIST_REL}: 复跑命令块列了 {name}，而 scripts/ 里没有这个脚本"
+                        f"→ 要么删掉这行幽灵命令，要么把守卫补回来")
+    return problems
+
+
+def guard_index_problems_real():
+    path = ROOT / GUARD_LIST_REL
+    if not path.is_file():
+        raise SystemExit(f"守卫清单闸取不到 {GUARD_LIST_REL}——判据够不到名册，不算通过")
+    listed = guard_cmd_names(path.read_text())
+    disk = {p.name for p in sorted((ROOT / "scripts").glob("check_*.py")) if p.is_file()}
+    # 两侧各自要有量：任一侧空掉都说明枚举口径塌了。空名册配上空磁盘会让本闸永远报绿，
+    # 那正是本闸要抓的「新守卫静默消失」的形状，不能由它自己表演一遍。
+    if len(disk) < 10:
+        raise SystemExit(f"守卫清单闸只枚举到 {len(disk)} 个 scripts/check_*.py（<10）"
+                         f"——枚举口径塌了，这条闸不能算通过")
+    if not listed:
+        raise SystemExit("守卫清单闸在名册里一条命令都没匹配到——行首口径坏了，不算通过")
+    return guard_index_problems(listed, disk), len(listed), len(disk)
+
+
+GUARD_SELFTEST = [
+    ("原样两边相等 → 必须 0 条",
+     {"check_a.py", "check_b.py"}, {"check_a.py", "check_b.py"}, 0),
+    ("磁盘上多一条没登记的守卫（本闸要抓的形状）→ 必须报 1 条",
+     {"check_a.py"}, {"check_a.py", "check_b.py"}, 1),
+    ("名册里留着一行已删守卫的命令 → 必须报 1 条",
+     {"check_a.py", "check_ghost.py"}, {"check_a.py"}, 1),
+    ("两边同时各缺一半 → 必须报 2 条（少登记与幽灵各自独立判，不互相抵掉）",
+     {"check_a.py"}, {"check_b.py"}, 2),
+    ("两边同名的不同守卫各一条，纯改名 → 必须报 2 条（不靠字符串相似度放宽）",
+     {"check_mobile.py"}, {"check_narrow.py"}, 2),
+]
+
+
+def guard_index_selftest():
+    bad = 0
+    for name, listed, disk, want in GUARD_SELFTEST:
+        got = len(guard_index_problems(set(listed), set(disk)))
+        flag = "✔" if got == want else "✘"
+        if got != want:
+            bad += 1
+        print(f"  [{flag}] {name}：报 {got} 条（应为 {want}）")
+    # 行首口径的两支判别：散文里出现同名脚本不进账（否则正文举例全被报成登记），
+    # 同一命令重复列两行只算一条（集合语义，判据不罚罗嗦）。
+    prose = "见 `check_b.py` 的判据说明。\npython3 scripts/check_a.py --selftest\n"
+    dup = "python3 scripts/check_a.py\npython3 scripts/check_a.py --selftest\n"
+    for label, text, want in (("散文提及不算登记", prose, {"check_a.py"}),
+                              ("重复列同一守卫只算一条", dup, {"check_a.py"})):
+        got = guard_cmd_names(text)
+        if got == want:
+            print(f"  [✔] {label}：实取 {sorted(got)}")
+        else:
+            bad += 1
+            print(f"  [✘] {label}：实取 {sorted(got)}（应为 {sorted(want)}）")
+    if bad:
+        raise SystemExit(f"守卫清单闸的自检 {bad} 条不符——判据本身不可信")
+    print("  自检结论：差集两侧各自报，集合语义不罚罗嗦，行首口径把举例挡在登记之外。")
+    return 0
+
+
 # ---------------------------------------------------------------- 标题丢失闸
 # 为什么要加这一条（2026-09-24 实测）：本轮用 Edit 改稿时**连着三次**把下一块的
 # 头部一起吃掉了——ch27 少了一段围栏、ch26 少了 `## 21.5` 标题、ch05 少了 `## 3.3` 标题。
@@ -356,7 +447,9 @@ def main():
         rc2 = empty_section_selftest()
         print("[撞号闸] 同文件小节编号不得撞号")
         rc3 = sid_selftest()
-        return rc1 or rc2 or rc3
+        print("[守卫清单闸] 复跑命令块 == scripts/check_*.py 全集")
+        rc4 = guard_index_selftest()
+        return rc1 or rc2 or rc3 or rc4
     problems, total_code, fence_lines = [], 0, 0
     for path in files():
         text = path.read_text()
@@ -371,10 +464,13 @@ def main():
     problems += head_problems
     sid_problems, sid_scanned = sid_collision_problems()
     problems += sid_problems
+    gi_problems, listed_n, disk_n = guard_index_problems_real()
+    problems += gi_problems
     if "--count" in sys.argv:
         print(f"{len(files())} 个 md 文件 / {fence_lines} 行围栏标记 / {total_code} 行代码块内容"
               f" / {baselined} 个文件有 HEAD 基线可对标题 / 空节闸扫 {scanned} 个文件"
-              f" / 撞号闸扫 {sid_scanned} 个手稿文件。")
+              f" / 撞号闸扫 {sid_scanned} 个手稿文件"
+              f" / 守卫清单闸对 {disk_n} 个 scripts/check_*.py（名册列 {listed_n} 个）。")
         return 0
     if problems:
         print("不通过：")
@@ -386,7 +482,8 @@ def main():
         f"{len(files())} 个 md 文件：围栏全部成对，正文无裸围栏串，"
         f"HTML 块后无未隔空的 markdown 语法；{len(DUAL_COPY)} 对根/docs 副本逐字节一致；"
         f"{baselined} 个文件的相对 HEAD 小节标题零丢失；{scanned} 个文件无空小节；"
-        f"{sid_scanned} 个手稿文件无小节编号撞号。结构闸通过。"
+        f"{sid_scanned} 个手稿文件无小节编号撞号；"
+        f"复跑命令块与 {disk_n} 个守卫脚本集合相等。结构闸通过。"
     )
     return 0
 
