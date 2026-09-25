@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Markdown 结构闸：围栏成对、正文不裸写围栏串、HTML 块后必须空行隔开、
-相对 HEAD 不丢小节标题、小节子树不得为空、根/docs 双副本逐字节一致。
+相对 HEAD 不丢小节标题、小节子树不得为空、同文件小节编号不得撞号、
+根/docs 双副本逐字节一致。
 
 Why：Docsify 用 marked 解析，两类破损都不报错、不产生死链，只有渲染后才看得见：
 · 正文里出现三个及以上反引号会被当作代码块起点，该行之后的整页被吞成裸文本
@@ -9,11 +10,14 @@ Why：Docsify 用 marked 解析，两类破损都不报错、不产生死链，�
   渲染（实测：docs/README.md 总览页上原样显示出一条 `---`）。
 第三类破损是**空小节**：标题在、内容不在（实测：第 28 章「回滚决策矩阵」只有标题，
 而附录 A 的提示词要读者"基于"它干活）。它不破结构也不破链接，只有人在读。
+第四类破损是**同文件撞号**：两条标题共用一个 `N.Nx` 编号（实测：第 23 章曾同时挂着
+两个 `23.4b`、第 24 章挂着两个 `24.9`）。Docsify 按标题文本生成锚点，撞号的两节
+各引用一次就不破链——破的是书：编号从此不能唯一指认一节，改号也没有机器读者会拦。
 所以在提交前用文本闸拦住。
 
 用法：python3 scripts/check_markdown.py            # 校验
       python3 scripts/check_markdown.py --count    # 只报覆盖量
-      python3 scripts/check_markdown.py --selftest # 标题闸 6 条 + 空节闸 4 条已知答案自检
+      python3 scripts/check_markdown.py --selftest # 标题闸 6 条 + 空节闸 4 条 + 撞号闸 5 条已知答案自检
 """
 import re
 import sys
@@ -138,6 +142,75 @@ def empty_section_selftest():
     if bad:
         raise SystemExit(f"空节闸的自检 {bad} 条不符——判据本身不可信")
     print("  自检结论：分组标题与「标题 + 一段围栏」都不报，真空节与末尾空标题必报。")
+    return 0
+
+
+# ---------------------------------------------------------------- 撞号闸
+# 为什么要加这一条（2026-09-26 量产命中面）：连续两轮在人工扩写里撞出同号小节——
+# 第 23 章两个 `23.4b`（托管形态与版本化的实现面各占一个，改号后登记于 DIAGNOSIS），
+# 本轮量命中面时又抓到第 24 章两个 `24.9`（检查清单与遗留问题）。全书文本引用靠
+# 「见 N.Nx」指认小节，而 Docsify 的锚点按标题文本生成：撞号不破任何一条现有闸，
+# 只让编号失去唯一指认能力——下一轮引用"24.9"时没人知道指哪节，改号也没机器读者拦。
+# 口径：只认「至少一个点、可带字母后缀」的纯数字编号（`26.5f`、`3.5b`），按整串相等
+# 分组，同文件 ≥2 条即报；围栏内不算（与空节闸/标题闸共用 heading_kinds 口径）；
+# 范围收在手稿目录——附录与站点页不靠 N.Nx 做文本引用，闸不该替它们立法。
+# 命中面基线：54 个手稿文件，修掉 24.9 后为 0——本闸立在一个已修好的缺陷上，不立空头闸。
+SID_HEAD = re.compile(r"^ {,3}#{1,6}\s+(\d+(?:\.\d+)+[a-z]?)(?![0-9a-z])")
+
+
+def sid_collisions(text):
+    """返回 [(编号, [(行号, 标题原文), ...]), ...]：同文件内出现 ≥2 次的 N.Nx 小节编号。"""
+    lines = text.splitlines()
+    kinds = heading_kinds(lines)
+    groups = {}
+    for i, line in enumerate(lines, 1):
+        if kinds[i - 1] != "head":
+            continue
+        m = SID_HEAD.match(line)
+        if m:
+            groups.setdefault(m.group(1), []).append((i, line.strip()))
+    return [(k, v) for k, v in sorted(groups.items()) if len(v) > 1]
+
+
+def sid_collision_problems():
+    problems, checked = [], 0
+    for path in sorted((DOCS / "manuscript").glob("*.md")):
+        checked += 1
+        for sid, hits in sid_collisions(path.read_text()):
+            where = "、".join(f"{no} 行「{t[:32]}」" for no, t in hits)
+            problems.append(f"{path.relative_to(ROOT)}: 小节编号 {sid} 撞号（{where}）"
+                            f"→ 编号要能唯一指认一节，给后出现的让它顺延")
+    if checked < 50:
+        raise SystemExit(f"撞号闸只扫到 {checked} 个手稿文件（<50）——枚举口径塌了，这条闸不能算通过")
+    return problems, checked
+
+
+SID_SELFTEST = [
+    ("同文件两条 `24.9`（本轮实测形状）→ 必须报 1 组",
+     "## 24.9 检查清单\n\n正文。\n\n## 24.9 遗留问题\n\n正文。\n", 1),
+    ("三级与带后缀是不同编号（3.5 / 3.5b）→ 必须不报",
+     "## 3.5 契约\n\n正文。\n\n## 3.5b 操作步骤\n\n正文。\n", 0),
+    ("围栏内照抄的同号标题不进账：块外仅一条、块内同串两条 → 必须不报（不感知围栏会报 1 组）",
+     "## 26.5f 决策表\n\n正文。\n\n```markdown\n## 26.5f 示例块里照抄的标题\n\n## 26.5f 块里再来一条\n```\n", 0),
+    ("`### 3. 列表式小标题`不是小节编号 → 必须不报",
+     "## 28.4 产出物\n\n### 1. 清单\n\n正文。\n\n### 2. 矩阵\n\n正文。\n\n### 3. 记录\n\n正文。\n", 0),
+    ("四段编号各一条（25.10 / 25.11）→ 必须不报",
+     "## 25.10 检查清单\n\n正文。\n\n## 25.11 遗留问题\n\n正文。\n", 0),
+]
+
+
+def sid_selftest():
+    bad = 0
+    for name, text, want in SID_SELFTEST:
+        got = len(sid_collisions(text))
+        flag = "✔" if got == want else "✘"
+        if got != want:
+            bad += 1
+        print(f"  [{flag}] {name}：报 {got} 组（应为 {want}）")
+    if bad:
+        raise SystemExit(f"撞号闸的自检 {bad} 条不符——判据本身不可信")
+    print("  自检结论：整串相等才算撞号，围栏内与 `### 1.` 列表头不进账；"
+          "排除支各带同段正对照，不靠整段读空蒙混过关。")
     return 0
 
 
@@ -281,7 +354,9 @@ def main():
         rc1 = heading_selftest()
         print("[空节闸] 小节子树不得为空")
         rc2 = empty_section_selftest()
-        return rc1 or rc2
+        print("[撞号闸] 同文件小节编号不得撞号")
+        rc3 = sid_selftest()
+        return rc1 or rc2 or rc3
     problems, total_code, fence_lines = [], 0, 0
     for path in files():
         text = path.read_text()
@@ -294,9 +369,12 @@ def main():
     problems += empty_problems
     head_problems, baselined = heading_problems()
     problems += head_problems
+    sid_problems, sid_scanned = sid_collision_problems()
+    problems += sid_problems
     if "--count" in sys.argv:
         print(f"{len(files())} 个 md 文件 / {fence_lines} 行围栏标记 / {total_code} 行代码块内容"
-              f" / {baselined} 个文件有 HEAD 基线可对标题 / 空节闸扫 {scanned} 个文件。")
+              f" / {baselined} 个文件有 HEAD 基线可对标题 / 空节闸扫 {scanned} 个文件"
+              f" / 撞号闸扫 {sid_scanned} 个手稿文件。")
         return 0
     if problems:
         print("不通过：")
@@ -307,8 +385,8 @@ def main():
     print(
         f"{len(files())} 个 md 文件：围栏全部成对，正文无裸围栏串，"
         f"HTML 块后无未隔空的 markdown 语法；{len(DUAL_COPY)} 对根/docs 副本逐字节一致；"
-        f"{baselined} 个文件的相对 HEAD 小节标题零丢失；{scanned} 个文件无空小节。"
-        "结构闸通过。"
+        f"{baselined} 个文件的相对 HEAD 小节标题零丢失；{scanned} 个文件无空小节；"
+        f"{sid_scanned} 个手稿文件无小节编号撞号。结构闸通过。"
     )
     return 0
 
