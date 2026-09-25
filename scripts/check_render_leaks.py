@@ -218,6 +218,11 @@ def selftest() -> int:
                 b.wait_for("document.querySelectorAll('.sidebar li a').length > 3", 30)
                 b.navigate(f"{base}/#/{quote('manuscript/ch06-第1章-AI原生不是让AI写代码')}")
                 b.wait_for("document.querySelector('.markdown-section')", 25)
+                # 等到九条对照的标题都进了 DOM 再采样：上一轮这一支在矩阵里被 CPU 竞争拖到
+                # 只走完 107 个节点，R3/R4 的节点压根没进来，报出来的红是"判据太松"的形状，
+                # 而实际发生的是页面没加载完——两者必须各有各的读数。
+                b.wait_for(f"[...document.querySelectorAll('.markdown-section h3')]"
+                           f".filter(h => /对照 [RG][0-9]/.test(h.textContent)).length >= {len(FIXTURES)}", 30)
                 b.wait_for("true", timeout=1.5)
                 d = json.loads(safe_text(b.js(PROBE_JS)))
         finally:
@@ -228,6 +233,12 @@ def selftest() -> int:
 
     if d["walked"] == 0:
         print("  [✗] 对照页走到 0 个文本节点——覆盖集为空，九条对照全部作废")
+        return 1
+    seen = {m.group(1) for n in d["src"] if (m := TAG_RE.search(n.get("head") or ""))}
+    missing = [tag for tag, *_ in FIXTURES if tag not in seen]
+    if missing:
+        print(f"  [✗] 覆盖缺失：{missing} 的文本节点没进采样面（走过 {d['walked']} 节点／"
+              f"{len(d['src'])} 个带归因标题的节点）——这一跑的其余对照不能当判据用")
         return 1
     hits: dict[str, list[str]] = {}
     for n in d["src"]:

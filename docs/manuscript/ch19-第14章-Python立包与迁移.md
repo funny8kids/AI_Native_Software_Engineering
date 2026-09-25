@@ -178,6 +178,8 @@ flowchart LR
 
 ## 14.5b PEP 621 逐行注释：`pyproject.toml` 的每个字段在替谁做决定
 
+> **档位声明（PEP 621 / setuptools 字段口径）**：**B 档 · 文档逐字 · 字段语义一律按 PEP 621 与 setuptools 文档口径书写，本机没有跑过任何构建或发布；节内 `tomllib` 解析读数只是标准库对文件结构的旁证，不构成构建工具的读数。**
+
 14.3 那份双跑配置示例只给了最小骨架。本节把立包当日的 `pyproject.toml` 逐行讲清：每个字段看着是元数据，实际都在替某个将来的动作做决定——缺一个字段，那个动作就会在半夜的构建日志里现形。
 
 > **档位声明**：字段语义按 PEP 621 与 setuptools 文档口径写（B 档），本节**没有**跑过任何构建或发布；但"这份文件能不能被正确解析成预期的结构"用了 Python 标准库自带的 `tomllib` 实测（本机实跑，Python 3.14.4，不装任何第三方包）。
@@ -230,6 +232,8 @@ tomllib.TOMLDecodeError: Cannot overwrite a value (at line 3, column 11)
 
 ## 14.5c 判据行：ruff 与 mypy strict 各管什么（B 档）
 
+> **档位声明（ruff 与 mypy strict 的判据行）**：**B 档 · 文档逐字 · 本机未安装 ruff 与 mypy（`python3 -m ruff` / `python3 -m mypy` 均报 `No module named`，此为在场性检查而非工具读数），本卡不贴任何运行读数，配置与判据行全按文档口径写。**
+
 > **档位声明**：**本机没有安装 ruff，也没有安装 mypy**——`python3 -m ruff --version` 与 `python3 -m mypy --version` 均返回 `No module named ruff` / `No module named mypy`（这是本机实跑的"工具在场性"检查，不是工具输出）。**本节不声称跑过这两个工具、不贴它们的任何报错**，只按文档口径写配置与判据行；拿到你的 CI 里跑通之后，才允许升格成你们环境的读数。
 
 ```toml
@@ -278,6 +282,8 @@ strict = true                          # strict 是一组开关的打包名，�
 > **档位声明**：本机有 pip（26.2.1）但本节写作全程未安装任何包、未联网取数，因此不出示安装类读数；`--require-hashes` 之类参数一律按 pip 文档口径描述，升格与否取决于你的 CI。
 
 ## 14.5e 把双跑真正跑起来：shim、`sys.modules` 换名与 meta_path 钩子（本机实跑）
+
+> **档位声明（shim、sys.modules 换名与 meta_path 钩子）**：**A 档 · 本机实跑 · 双跑演示与三次失效面注入全部在本机跑过，代码只用标准库模块（`sys` / `warnings` / `importlib`），无任何第三方依赖。**
 
 > **档位声明**：本节所有代码与输出在本机跑过（Python 3.14.4，只用标准库，无第三方包）。目录形状：`src/promo_rules_v2/`（新包，事实来源）、`src/promo_rules/`（shim，只余 `__init__.py` 与一个旧子模块）、`src/compat_hook.py`（meta_path 钩子）、`domain_a/`、`domain_b/`（两个未迁域）。
 

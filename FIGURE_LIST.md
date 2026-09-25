@@ -143,7 +143,7 @@ python3 scripts/check_legibility.py                   # 第七条：有效字号
 python3 scripts/check_legibility.py --report          # 逐图输出 自然字号 / 有效字号 / 缩放
 python3 scripts/check_legibility.py --mutate          # 第七条的变异自检 A–G：每条判据各自要能报红（F＝表格不再被套进滚动层；G＝封面入口改名）
 python3 scripts/check_palette.py                      # 第八条：token 纪律 + 逐层 alpha 合成后的对比度 + 分色族可辨性 + 焦点环 + 悬停可辨性（真浏览器、真点 #btn-theme、真点鼠标）
-python3 scripts/check_palette.py --mutate             # 第八条的变异自检 P1–P21：每条判据各自要能报红（P10＝封面入口改名，首页正文无从抵达；P11＝位图锚点回执停在图版另一色，派生件对账在工作；P15/P16＝焦点环的环色不跟强调色 / 偏移成负值；P17＝声明的选择器被运行时注入的第二宿主赢；P18/P19＝index.html 的色抄件停在上版令牌 / 兜底表外冒出没人认领的抄件；P20/P21＝删掉书名的 :hover / hover 字色改成合法的边框灰，针「没有任何反馈」「字反而糊了」）
+python3 scripts/check_palette.py --mutate             # 第八条的变异自检：每条判据各自要能报红。条数与针数由这条命令自己打印（本行不抄计数：清单会长、抄件不会）——P10＝封面入口改名，首页正文无从抵达；P11＝位图锚点回执停在图版另一色，派生件对账在工作；P15/P16＝焦点环的环色不跟强调色 / 偏移成负值；P17＝声明的选择器被运行时注入的第二宿主赢；P18/P19＝index.html 的色抄件停在上版令牌 / 兜底表外冒出没人认领的抄件；P20/P21＝删掉书名的 hover / hover 字色改成合法的边框灰，针「没有任何反馈」「字反而糊了」；P22＝追加一条与现网同值的重复块，针「永不生效」；P23＝在被读的那个元素上挂无限动画，针「读到的不是终值」
 python3 scripts/check_palette.py --screenshot DIR     # 1280/1440/390 × 浅/深 逐页截图（题图与配色改动后逐项复核用这条）
 python3 scripts/check_render_leaks.py                 # 第九条：写了 markdown 语法却没渲染出来的（粗体／行内码／链接的残留字面量，浏览器实测）
 python3 scripts/check_render_leaks.py --selftest      # 第九条的桩件自检
@@ -151,6 +151,9 @@ python3 scripts/check_incidents.py                    # 第十条：跨文件事
 python3 scripts/check_incidents.py --selftest         # 第十条的变异对照 M1–M7 ＋ 两条正例 ＋ 未变异控制跑
 python3 scripts/check_replay.py                       # 第十一条：书稿里的 python 块按 print 模板重放，紧邻 text 块的读数行必须落进模板
 python3 scripts/check_replay.py --selftest            # 第十一条的桩件自检；它同时打印自己的盲区（交人工的块数与行数），别把红零当全绿
+python3 scripts/check_tier_ledger.py                  # 第十二条：档位对账闸——§4.5c 台账 49 行逐行等于对应卡上的具名档位声明（键整串相等／落点／档位集合／反向孤立声明）
+python3 scripts/check_tier_ledger.py --selftest        # 第十二条的桩件自检：十支 fixture（正对照＋六类坏件＋两支派生支＋一支围栏归属）
+python3 scripts/check_tier_ledger.py --print           # 整列档位由卡派生：改档位的动作从这里开始，格子不许手填字母
 python3 scripts/plate_engine.py --check               # 题图引擎自检：板外色 / XML 解析 / 含 <text> 三种都判红
 python3 scripts/plate_engine.py --emit --no-preview    # 按当前 --c-plate* 令牌重发九张题图 SVG（改过图版令牌必跑；不发到 /tmp 之外等于没改）
 python3 scripts/recolor_plate_art.py --check          # 位图只量不改：冷调 / 暖调 / 墨线三条读数

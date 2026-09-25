@@ -1988,11 +1988,11 @@ def hover_selftest() -> None:
                          + "\n  ".join(bad))
 
 
-def hover_quiesce(b: CDP, timeout: float = 6.0) -> bool:
+def quiesce(b: CDP, timeout: float = 6.0) -> bool:
     """等页面没有一个在跑的过渡/动画。本仓没有循环动画（实测：落定后
     document.getAnimations() 恒为 0），而 theme.css 最长 transition 是 .4s——
     不静默就取签名，取到的是过渡中途的值，"撤开后仍停在悬停态"会假红一片。
-    不猜时长，等它自己停。"""
+    不猜时长，等它自己停。悬停口径与生效对账共用这一条。"""
     return b.wait_for("document.getAnimations().length === 0", timeout)
 
 
@@ -2003,7 +2003,7 @@ def hover_park(b: CDP):
     b.call("Input.dispatchMouseEvent",
            {"type": "mouseMoved", "x": HOVER_PARK[0], "y": HOVER_PARK[1]})
     time.sleep(0.12)
-    if not hover_quiesce(b):
+    if not quiesce(b):
         return False, -1
     return True, b.js("document.querySelectorAll(':hover').length")
 
@@ -2012,7 +2012,7 @@ def hover_settled(b: CDP, i: int):
     """定位 → 等静默 → 再读一次；返回 None 表示这一站取不到可信的静息终态。
     两次读是必要的：滚进视口自己会触发揭示过渡。"""
     p = b.js(hover_at(i))
-    if not p or p.get("gone") or not hover_quiesce(b):
+    if not p or p.get("gone") or not quiesce(b):
         return None
     p = b.js(hover_at(i))
     return None if (not p or p.get("gone")) else p
@@ -2104,7 +2104,7 @@ def hover_walk(b: CDP, base: str, routes: list[str], theme: str, w: int,
             b.call("Input.dispatchMouseEvent",
                    {"type": "mouseMoved", "x": pre["x"], "y": pre["y"]})
             time.sleep(0.12)                    # 给过渡一次登记的机会，再等它停
-            hover_quiet = hover_quiesce(b)
+            hover_quiet = quiesce(b)
             hov = b.js(hover_read(ent["i"]))
             back_quiet, _ = hover_park(b)
             back = b.js(hover_read(ent["i"]))
@@ -2288,7 +2288,19 @@ def audit(base: str, pages: list[str], themes: list[str],
                                          f"深 {d['tokens'].get('--c-plate')}）——全书的图约定是同一张纸")
                             continue
 
-                    # 生效对账：作者写在 theme.css 里的声明，页面算出来必须还是它
+                    # 生效对账：作者写在 theme.css 里的声明，页面算出来必须还是它。
+                    # 参照物是**自定义属性**（换档那一帧就是终值），被比对的是**真实属性**
+                    # （theme.css:214 一类 `transition: all .2s` 会让颜色属性跑一段过渡）。
+                    # 不等过渡停完就取读数，取到的是插值：2026-09-25 实测深档首页那次三个通道
+                    # 各差 1（bg #211e1a→读成 34,31,27／text #ece6da→235,229,217），方向恰好是
+                    # 浅档→深档的插值途中，而判据把"差 1"报成"这条声明被别的宿主赢了"。
+                    # 时长不写死（.2s 的 sleep 在 CPU 争用下就是这次的红）——等它自己停，停不下来作废。
+                    time.sleep(0.12)  # 过渡要先登记进 getAnimations() 才查得到，不等会把"没开始"读成"已停"
+                    if not quiesce(b):
+                        fails.append(f"[{label}] 生效对账前 6s 内页面仍停在过渡/动画里"
+                                     f"（{b.js('document.getAnimations().length')} 条在跑）——"
+                                     f"getComputedStyle 读到的不是终值，本页读数作废")
+                        continue
                     rows = b.js(EFFECT_PROBE_JS, timeout=60) or []
                     stats["effectRows"] += len(rows)
                     if not rows:
@@ -2630,6 +2642,23 @@ if contrast_rgb(rgb_of(_hover_bad), rgb_of(_LIGHT0["--c-desk"])) >= MIN_TEXT_RAT
     raise SystemExit(f"P21 的坏悬停色 {_hover_bad} 对纸底仍过地板——坏样本不坏，换一个令牌")
 P21_NEW = _HOVER_TITLE_BLOCK.replace("var(--c-accent-hover)", "var(--c-border)")
 
+# P23 打的是新增的那一步："取计算值之前页面必须已经静默"。坏样本不改一个字面的色，
+# 只在被读的那个元素上挂一条**无限**动画——页面永远停在 getAnimations() != 0。
+# 这条变异的存在理由：生效对账的参照是自定义属性（换档即终值），被比对的是真实属性
+# （会跑 transition）；不静默就读，两边比的是"终值 vs 插值"，红与绿都不可信。
+P23_OLD = '  <link rel="stylesheet" href="theme.css">'
+if _index_text.count(P23_OLD) != 1:
+    raise SystemExit(f"P23 的 index.html 锚出现 {_index_text.count(P23_OLD)} 次（需要恰好 1 次）"
+                     "——宿主形状改了，载荷跟着改")
+P23_NEW = (P23_OLD + "\n  <style>/* 变异 P23 */ @keyframes ainse-endless {to{transform:translateY(0)}}"
+           "\n  div.search input { animation: ainse-endless 1s linear infinite; }</style>")
+
+# P24 打的是「活指令里抄走的条数会腐烂」这一支：往真文档里补一行把变异条数抄成 P 区间的
+# 命令说明。色板、令牌、页面全都没动——只有这一支会红。区间值故意取一个"曾经对过"的旧数：
+# 这条判据判的不是数得准不准，而是"这个数有没有第二个宿主"。
+P24_NEW = ("\npython3 scripts/check_palette.py --mutate"
+           "   # （变异 P24）第八条的变异自检 P1–P19 各自要能被按机制打红\n")
+
 MUTATIONS = [
     ("P1 正文灰到看不清（--c-text-3 提到接近纸色）", "theme.css",
      "  --c-text-3:     #6e675c;", "  --c-text-3:     #ded9cf;", "正文对比度"),
@@ -2722,6 +2751,14 @@ MUTATIONS = [
     # 只有「写了两次、前一次永不生效」这一支会红。这条变异就是那条判据的存在理由本身。
     ("P22 追加一个与现网同值的 blockquote 背景块（画面对，前一次写了没人读）", "theme.css",
      "", "\n.markdown-section blockquote {\n  background: var(--c-bg-soft);\n}\n", "永不生效"),
+    # 取数时机这一支：色板、声明、令牌全都没坏，坏的是"在过渡里读计算值"。
+    # 修之前这条变异 0 红（读数一切正常，因为读到的确实是插值而判据看不出来）。
+    ("P23 在被读元素上挂无限动画（页面永不静默，计算值是插值）", "index.html",
+     P23_OLD, P23_NEW, "读到的不是终值"),
+    # 条数只住在 MUTATIONS 与 `--mutate` 的第一行；文档里那两处命令说明抄走过一次区间，
+    # 清单加一条它们当天失真。这条打的正是那个形状（值本身"曾经是对的"）。
+    ("P24 命令说明里抄走变异条数（第二个事实源）", "DIAGNOSIS.md",
+     "", P24_NEW, "抄进了这条命令"),
 ]
 
 
@@ -2788,6 +2825,52 @@ def run_mutations() -> int:
     return bad
 
 
+MUTATE_CMD_LINE = re.compile(r"check_palette\.py\s+--mutate")
+P_RANGE = re.compile(r"P1[-–]P\d+")
+
+
+def scan_prose_mutation_ranges(docs_dir: Path) -> tuple[list[str], int, int]:
+    """对象是"活指令"，不是历史：一行如果在告诉读者"跑这条命令会看到哪些变异"（含
+    `check_palette.py --mutate`），它抄走的条数就是第二个事实源——清单每加一条，它当场少报一条
+    （实测 P22 落地那天，两处这样的命令行注释还停在 P1–P21）。
+    带日期的事故记录里那些 P1–P9 是"当天为真"的快照而不是指令，不在对象范围内
+    （真树实测 9 处这样的句子，一律不该红——把历史改写成没数才算干净，是把判据调歪）。
+    返回 (失败, 扫过的 md 文件数, 命中数)。"""
+    fails, files, hits = [], 0, 0
+    for p in sorted(docs_dir.rglob("*.md")):
+        files += 1
+        for ln, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+            if not MUTATE_CMD_LINE.search(line):
+                continue
+            m = P_RANGE.search(line)
+            if m:
+                hits += 1
+                fails.append(f"[抄件登记·P 区间] {p.name}:{ln} 的「{m.group(0)}」把第八条的变异条数"
+                             f"抄进了这条命令的说明——清单会长、抄件不会；"
+                             f"改写成「条数由 --mutate 自己打印」")
+    return fails, files, hits
+
+
+def prose_range_selftest() -> None:
+    """这条新判据自己的极性对照＋两支假阳：不靠真树，合成一个文件就地把住。"""
+    text = ("python3 scripts/check_palette.py --mutate   # 第八条的变异自检 P1–P21\n"
+            "python3 scripts/check_palette.py --mutate   # 条数与针数由这条命令自己打印\n"
+            "- **（2026-09-24）当日记录**：那天的变异是 P1–P9，退出码 0。\n")
+    with tempfile.TemporaryDirectory() as td:
+        t = Path(td)
+        (t / "a.md").write_text(text)
+        (t / "b.md").write_text("普通一行，没提这条命令。\n")
+        fails, files, hits = scan_prose_mutation_ranges(t)
+    if files != 2:
+        raise SystemExit(f"P 区间判据自证：说扫 2 个 md，实际扫到 {files} 个——枚举口径可疑，中止")
+    if hits != 1 or len(fails) != 1 or ":1 " not in fails[0]:
+        raise SystemExit(f"P 区间判据自证：三行里该只报第一行（1 条、带行号 1），实际 {hits} 条：{fails}")
+    # 红的那一条指的必须是抄走的那个区间，不能是把当日记录或干净命令行也算进去
+    got = P_RANGE.findall("".join(fails))
+    if got != ["P1–P21"]:
+        raise SystemExit(f"P 区间判据自证：报红指的区间是 {got}（应为 ['P1–P21']）——判据看错了对象")
+
+
 def static_fails(theme_path: Path = THEME, docs_dir: Path = DOCS) -> tuple:
     lab_selftest()
     focus_selftest()
@@ -2796,6 +2879,7 @@ def static_fails(theme_path: Path = THEME, docs_dir: Path = DOCS) -> tuple:
     index_literal_selftest()
     dead_decl_selftest()
     dead_py_selftest()
+    prose_range_selftest()
     light, dark = parse_tokens(theme_path.read_text())
     fails = scan_literal_colors(theme_path.read_text())
     md_fails, seen = scan_mermaid_palette(docs_dir, light)
@@ -2809,14 +2893,16 @@ def static_fails(theme_path: Path = THEME, docs_dir: Path = DOCS) -> tuple:
     band_fails, bands, pairs, band_themes, tight_pair, tight_paper = scan_band_separation(docs_dir, light, dark)
     dead_fails, css_rows, css_groups = dead_css_decls(theme_path.read_text())
     guard_fails, guard_files = guard_selfcheck()
+    prose_fails, prose_files, prose_hits = scan_prose_mutation_ranges(docs_dir)
     return (fails + md_fails + fb_fails + lit_fails + ras_fails + band_fails
-            + dead_fails + guard_fails,
+            + dead_fails + guard_fails + prose_fails,
             {"tokens": (len(light), len(dark)), "mermaid": seen, "refs": refs,
              "entries": entries, "raster": raster, "bands": bands, "pairs": pairs,
              "band_themes": band_themes, "tight_pair": tight_pair, "tight_paper": tight_paper,
              "hosts": hosts, "found": found, "stray": stray,
              "css_rows": css_rows, "css_groups": css_groups, "dead": len(dead_fails),
-             "guard_files": guard_files, "guard_defs": len(guard_fails)})
+             "guard_files": guard_files, "guard_defs": len(guard_fails),
+             "prose_files": prose_files, "prose_ranges": prose_hits})
 
 
 def main() -> int:
@@ -2872,6 +2958,8 @@ def main() -> int:
           f"{S['dead'] == 0}")
     print(f"[静态] 守卫件自己过堂：{S['guard_files']} 个 scripts/*.py 里顶层同名定义 "
           f"{S['guard_defs']} 处：{S['guard_defs'] == 0}")
+    print(f"[静态] 文档抄件：扫 {S['prose_files']} 个 md，把第八条变异条数抄成 P 区间的 "
+          f"{S['prose_ranges']} 处（条数只住在 --mutate 第一行）：{S['prose_ranges'] == 0}")
     for f in static[:20]:
         print("  ✗", f)
 
