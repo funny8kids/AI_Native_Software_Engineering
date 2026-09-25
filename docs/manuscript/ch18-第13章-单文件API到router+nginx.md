@@ -238,6 +238,286 @@ nginx: configuration file /srv/ngx/conf/nginx.conf test is successful   ← 两�
 
 ---
 
+## 13.5b 可抄骨架：三层的最小可跑形状（本机实跑）
+
+13.3 那份判定规则写得再准，也还是会遇到同一句反问：分对层这件事，除了人评审，**还有没有别的证据可以拿**？ 有——把三层跑起来，让同一批请求去撞它。一份能抄的形状比一段描述更有用，因为读者可以照着改，改错了状态码会告诉他。
+
+> **档位声明**：本节代码与全部输出都在本机跑过（Python 3.14.4 / FastAPI 0.141.1 / pydantic 2.13.5 / httpx 0.28.1，请求走 `httpx.ASGITransport`，不起端口、不依赖 uvicorn）。**本机没有 nginx，本节不涉及任何 nginx 行为**；nginx 的语义在下面的 13.5c，按规范写。
+
+### 目录与依赖方向
+
+```text
+app/
+  main.py                  # 组装 + 领域错误 → HTTP 状态码的唯一映射点
+  api/
+    deps.py                # 组合根：三层在这里接线
+    routers/coupons.py     # router：HTTP 解析、参数校验、协议层拒绝（401/403）
+  services/coupon.py       # service：业务规则与状态流转；不写 SQL、不发 HTTP
+  repositories/coupon.py   # repository：只有 SQL 与行；不出现业务名词判断
+  domain/errors.py         # 领域错误：被上两层共用，谁都不许 import 谁
+```
+
+依赖方向从上到下单向：`routers → services → repositories`，`domain` 谁都可以被引用、它不引用任何人。**这张目录树本身就是 13.1 那句"按职责切，不按业务名词切"的落地物**——切完之后每一片还叫得出职责，而不是"优惠券组"。
+
+### 五份文件
+
+```python
+# app/domain/errors.py —— 错误是领域对象，不是 HTTP 异常
+class DomainError(Exception):
+    code = "domain_error"          # 机器可读的错误名，进契约的错误码表
+class CouponNotFound(DomainError):  code = "coupon_not_found"
+class AlreadyGranted(DomainError):  code = "coupon_already_granted"
+class ThresholdNotMet(DomainError): code = "threshold_not_met"
+
+# app/repositories/coupon.py —— 只说 SQL 与行，不出现业务名词判断
+class CouponRepo:
+    def __init__(self):
+        self.conn = sqlite3.connect(DB, check_same_thread=False)   # 见下面的坑
+    def get(self, coupon_id):        ...      # 返回 dict 或 None，不判"这张券还能不能用"
+    def mark_used(self, coupon_id):  ...      # 只做一次 UPDATE
+
+# app/services/coupon.py —— 业务规则；这里出现 HTTP 或 SQL 就是分错层
+MIN_ORDER_CENTS = 20000                 # 示意常量：真实值进配置，不留代码里
+
+class CouponService:
+    def __init__(self, repo):
+        self.repo = repo                # 注入的是抽象，测试里可以塞 fake repo
+    def use(self, coupon_id, order_cents):
+        row = self.repo.get(coupon_id)
+        if row is None:
+            raise CouponNotFound(coupon_id)
+        if row["status"] != "granted":
+            raise AlreadyGranted(coupon_id)          # 同一张券二次核销
+        if order_cents < MIN_ORDER_CENTS:
+            raise ThresholdNotMet("order below threshold")
+        self.repo.mark_used(coupon_id)
+        return {"coupon_id": coupon_id, "discount_cents": row["amount_cents"],
+                "payable_cents": order_cents - row["amount_cents"]}
+```
+
+```python
+# app/api/routers/coupons.py —— 协议层：URL、鉴权头、请求模型
+router = APIRouter(prefix="/coupons", tags=["coupons"])   # prefix 只管 URL，不管进程边界
+
+class UseIn(BaseModel):                # 参数校验是 router 的活，不交给 service
+    order_cents: int = Field(ge=1)
+
+@router.get("/{coupon_id}")
+def read_coupon(x_tenant: str = Header(...), coupon_id: str = None,
+                svc: CouponService = Depends(get_coupon_service)):
+    if x_tenant != "tenant-a":
+        raise HTTPException(403, detail="tenant_mismatch")   # 协议层拒绝：留在这里
+    return svc.quote(coupon_id)                              # 语义结果：交给 service
+
+@router.post("/{coupon_id}/use")
+def use_coupon(body: UseIn, coupon_id: str = None,
+               svc: CouponService = Depends(get_coupon_service)):
+    return svc.use(coupon_id, body.order_cents)
+
+# app/main.py —— 组装；状态码映射只在这一个地方
+app = FastAPI(title="promo-coupon")
+app.include_router(coupons.router)
+STATUS = {CouponNotFound: 404, AlreadyGranted: 409, ThresholdNotMet: 422}
+
+@app.exception_handler(DomainError)
+async def domain_error_handler(request: Request, exc: DomainError):
+    return JSONResponse(status_code=STATUS.get(type(exc), 500),
+                        content={"error": exc.code})   # service 至今不知道 HTTP 是什么
+```
+
+`APIRouter` 这一段是本章标题里的那个词。它值得单说一句：`include_router` **这条挂载发生在编译期，不是运行时的路由表下发**。prefix、tags、dependencies 都在导入时定死；一个 router 想跨域复用，复用的是"URL 前缀 + 依赖声明"这套形状，不是那段业务代码。所以"每个域一个 router 文件"这件事，治理含义是**接口面的分账单位**——契约变更影响哪个 router，PR 就落在哪个 Owner 头上。
+
+### 跑起来看什么
+
+测试里不开端口：`httpx.AsyncClient(transport=httpx.ASGITransport(app=app))` 直接把 ASGI 应用接进客户端，请求照常走完 router → service → repository 的整条链。九条真实请求与真实响应：
+
+```text
+$ python3 tests/test_coupons.py            # 本机实跑，九条请求
+GET  /coupons/c-1        req={"x-tenant": "tenant-a"}  -> 200 {"id":"c-1","user_id":"u-1","amount_cents":3000,"status":"granted"}
+GET  /coupons/c-1        req={"x-tenant": "tenant-b"}  -> 403 {"detail":"tenant_mismatch"}
+GET  /coupons/nope       req={"x-tenant": "tenant-a"}  -> 404 {"error":"coupon_not_found"}
+POST /coupons/c-1/use    req={"order_cents": 25000}    -> 200 {"coupon_id":"c-1","discount_cents":3000,"payable_cents":22000}
+POST /coupons/c-1/use    req={"order_cents": 25000}    -> 409 {"error":"coupon_already_granted"}
+POST /coupons/c-2/use    req={"order_cents": 100}      -> 422 {"error":"threshold_not_met"}
+POST /coupons/c-2/use    req={"pay": "250元"}           -> 422 {"detail":[{"type":"missing","loc":["body","order_cents"],"msg":"Field required","input":{"pay":"250元"}}]}
+GET  /coupons/c-2        req={}                        -> 422 {"detail":[{"type":"missing","loc":["header","x-tenant"],"msg":"Field required","input":null}]}
+GET  /coupons/c-2/       req={"x-tenant": "tenant-a"}  -> 307
+```
+
+这九行就是"分对层"的证据形状：
+
+- **同一个业务规则（能不能核销），换了拒绝原因就该换状态码**：404 找不到、409 二次核销、422 门槛不足。三个码都来自 `main.py` 那一张映射表，Service 里一条 `if` 都没写 HTTP。**如果哪天状态码开始散在 service 的 return 里，说明这一层又糊了。**
+- **`422` 有两种来源，别混**：`{"error":"threshold_not_met"}` 是业务规则（本服务定的），`{"detail":[{"type":"missing"...}]}` 是框架的校验器（请求形状不对）。**两种 422 的账落在不同地方**——前者进契约的错误码表，后者是 router 的守卫；混在一起看，错误率告警会指错方向。
+- **尾斜杠差一个字符就不是同一条路由**（本机实跑：`GET /coupons/c-2/` 返回 `307`）。FastAPI/Starlette 对它的处理取决于版本与配置，**网关改写路径时最容易撞上的就是这一格**——13.5c 的 `proxy_pass` 尾斜杠语义讲的就是它。顺带一条同源读数：`{"order_cents": true}` 能通过 `int` 校验并被当成 `1`，于是拿到 `422 threshold_not_met` 而不是形状错误——**这不是框架的 bug，是"契约里写的类型"和"你真正允许的取值"之间的距离**（第 9 章 9.5f 同一条纪律）。
+
+### 三个真跑出来的坑（比骨架本身有用）
+
+1. **`body: dict` 不校验，router 就退化成转发器。** 把 `UseIn` 换成 `dict` 再发同一份错误请求，`$ python3 tests/test_500.py`（本机实跑）拿到的是 `未声明请求模型时: 500 Internal Server Error`，应用日志里是 `KeyError: 'order_cents'`。**一个字段名写错的用户请求，会伪装成一次服务端故障**：错误率告警响、契约测试全绿、排查方向整个反了。这就是 13.3 把"参数校验"划给 router 层的物理理由——不是洁癖，是**让客户端的错留在客户端的账上**（4xx），别污染服务的错误率。
+2. **同步端点跑在线程池里，repository 单例的连接会被跨线程复用。** 第一版本机直接抛：
+
+```text
+sqlite3.ProgrammingError: SQLite objects created in a thread can only be used in that same thread. The object was created in thread id 125728413348352 and this is thread id 125728357512896.
+```
+
+   `def`（非 `async def`）端点会被丢进线程池，模块级连接的线程归属就漂了。`check_same_thread=False` 能让它跑，但**能不能并发复用一条连接，是另一个问题**——正解是每请求一条连接或走连接池。**这类坑的共同点：本地单线程测不出来，一次分层接线就炸。**
+3. **测试客户端默认会把异常抛回测试，不给你状态码。** 上面那次 500 是要显式 `ASGITransport(app=app, raise_app_exceptions=False)` 才看到的。换句话说：**如果你的三层测试从来没见过 500，可能不是因为代码没崩，是因为崩在你看的窗口外面。**
+
+## 13.5c nginx 的 location 匹配与 proxy_pass 尾斜杠（B 档）
+
+> **档位声明**：**本机没有安装 nginx，也没有它的任何报错可贴。** 下面只讲规范里写明的匹配次序与替换语义，全部以你自己的环境里 `nginx -T` 输出的最终生效配置为准（上一节那张卡给了 `nginx -T` 的用法）。任何"某版本默认值是 X"的说法这里一律不出现。
+
+13.5 那份灰度骨架里，最危险的一行不是 `split_clients`，是 `proxy_pass`。**它决定了后端看到的路径长什么样**，而这一件事在配置里是隐式的：
+
+- `location /api/ { proxy_pass http://backend; }`（不带 URI）→ 后端收到的是**原始请求路径**，`/api/coupons/c-1` 原样透传。
+- `location /api/ { proxy_pass http://backend/; }`（带 URI，哪怕只是一个 `/`）→ nginx 把 location 前缀**替换**成 `proxy_pass` 的 URI 部分，后端看到的变成 `/coupons/c-1`。
+
+这就是"改一行配置、路由静默换面"的形状：**两种写法都合法、都能启动、`-t` 都过**，区别只在后端收到什么路径。如果你的 FastAPI 挂了 `prefix="/api"`，第二种写法会把所有请求打成 404，而 nginx 的访问日志全是 200 之外的其他码——**看日志的人第一反应是"后端挂了"，不是"我改掉了前缀"。**
+
+前缀匹配本身的次序值得记住（规范口径）：
+
+1. `location = /path` 精确匹配，命中即停；
+2. 否则取**最长前缀**匹配（不是"写在前面就赢"），前缀之间不比书写顺序；
+3. 最长前缀若带 `^~`，直接用它；否则再按书写顺序试正则 `~` / `~*`，正则命中即赢；
+4. `@name` 是内部跳转目标（`error_page`、`try_files` 的兜底），不参与上面的竞争。
+
+> **它替代不了什么**：这些规则管的是"哪个 location 赢"，管不了"哪个服务该收这个请求"。**灰度期的正确性判据只有 13.5 那张灰度回路里的对比监控，不在 location 匹配里**——路径改写错了，nginx 会认为它工作得很好。
+
+### 判据：把"尾斜杠决定"写成一条可 grep 的纪律
+
+```bash
+# 每个 location 都必须显式决定 proxy_pass 带不带 URI；下面把"不带 URI"的写法列出来复核
+grep -nE 'location|proxy_pass' deploy/nginx/*.conf | awk -F: '{print $1, $2, $3}'   # 输出交给评审人看
+# 只出报表不出红灯：静态 grep 认不出 include 与 if 里的跳转，语义要靠 nginx -T 的最终生效集判断
+```
+
+配套要求：`proxy_pass` 后面**不许带变量**（带变量就要显式 `resolver`，否则是运行期才炸的坑）；上游用 `upstream` 命名走静态解析；`X-Forwarded-*` 三条头按上一节那张卡的写法补齐——**后端拿不到真实客户端 IP 与协议，限流与灰度分流都会算错人**。
+
+## 13.5d 超时、重试、熔断的预算算术（可抄）
+
+前置 nginx 之后，"超时/重试/熔断"从业务代码搬到了配置里。搬过来只是换了地方写，**不等于算对了**——最贵的错误是"每一跳各写各的"：写的时候各自都合理，串起来就同时超预算又放大流量。下面这段算术可以照抄进评审会。图 13-3 是这条链的形状：**预算箭头从外往里变窄，放大箭头从里往外变宽**。
+
+```python
+def spend(t, r, base=0.1, ratio=2.0, cap=0.5):
+    """一跳的最坏占用 = 首次超时 + 每次重试的超时 + 退避等待（指数递增，封顶 cap）"""
+    waits = [min(cap, base * ratio ** k) for k in range(r)]
+    return t * (1 + r) + sum(waits)          # 退避也要算进占用：漏掉它是最常见的算错方式
+
+def check(name, t, r, budget):               # budget = 这一跳允许的父预算（秒）
+    s = spend(t, r)
+    print(("OK   " if s < budget else "红灯 "),
+          f"{name}timeout={t:.2f}s 重试={r} 次 → 最坏占用 {s:.2f}s，父预算 {budget:.2f}s")
+```
+
+```text
+$ python3 budget.py            # 本机实跑；秒数与重试次数全是示例值，用来演示算术本身
+=== 违规版本：外层用户预算 1.2s，三跳各自写了更宽的超时
+红灯  网关→A timeout=1.00s 重试=2 次 → 最坏占用 3.30s，父预算 1.20s
+红灯  A→B    timeout=0.90s 重试=2 次 → 最坏占用 3.00s，父预算 1.20s
+红灯  B→DB   timeout=0.80s 重试=2 次 → 最坏占用 2.70s，父预算 1.20s
+=== 收敛版本：从用户预算往下分配，内层永远比外层窄
+OK    网关→A timeout=0.40s 重试=1 次 → 最坏占用 0.90s，父预算 1.20s
+红灯  A→B    timeout=0.15s 重试=1 次 → 最坏占用 0.40s，父预算 0.40s   ← 等于父预算也不行
+红灯  B→DB   timeout=0.05s 重试=1 次 → 最坏占用 0.20s，父预算 0.15s
+```
+
+三条结论，都能抄成一句话：
+
+1. **预算是从外往里减的，不是每跳独立定的。** 判据式子就一条：`spend(内层) < timeout(外层单次)`，而且**取等号也要判红**——上面那个 `0.40 vs 0.40` 的红灯就是这条：外层先超时，内层的重试就永远做在没人等的请求上，纯烧容量。
+2. **重试的代价是连乘的**：`故障期下游到达率 = 入口到达率 × Π(1 + 每跳重试次数)`。本机实跑的三行算术：
+
+```text
+入口 100/s（示例值）：每跳重试 1 次 × 3 跳 → 最内层峰值   800/s（8 倍）
+                      每跳重试 2 次 × 3 跳 → 最内层峰值 2,700/s（27 倍）
+                      每跳重试 1 次 × 5 跳 → 最内层峰值 3,200/s（32 倍）
+```
+
+   **注意最后两行**：跳数比次数更能放大流量。把"每跳 2 次"改成"每跳 1 次"看着温柔，链一长就回到 8 倍；而链上多一次扇出（微服务拆得更细、BFF 多一跳），倍率立刻跳一档。**这也是 13.4 那次拆分要顺带把超时挪进 nginx 的真正理由：入口那一跳的预算，必须由入口统一持有。**
+3. **熔断要有最小样本数。** 只写失败率阈值会误伤。本机实跑，阈值取"窗口失败率 ≥ 50% 且窗口样本 ≥ 20 才开"：`3/5 = 60% → 不开`、`12/20 = 60% → 开`、`9/20 = 45% → 不开`、`11/20 = 55% → 开`。没有最小样本数的那条阈值，会在低峰期被一两次抖动顶开；开了之后放探测流量进去，又恰好打在还在恢复的实例上——**这就是越保护越不稳**（半开探测与恢复节奏在 [第 28 章](./ch33-第28章-灰度发布.md)）。
+
+```mermaid
+flowchart TB
+  U[用户请求] --> G[入口网关<br/>预算：从外往里减]
+  G --> A[服务 A<br/>超时 + 1 次重试]
+  A --> B[服务 B<br/>超时 + 1 次重试]
+  B --> D[(数据/第三方)]
+  A -.失败率过阈值.-> CB[熔断：开→半开→关]
+  CB -.探测流量.-> A
+  G -.超预算先返回.-> X[下游重试白做<br/>容量还在烧]
+  style G fill:#fcefd3,stroke:#9d6127,color:#1e1c19
+  style CB fill:#f1ebde,stroke:#2f6154,color:#1e1c19
+  style X fill:#ffe3df,stroke:#a03b31,color:#1e1c19
+```
+
+**图 13-3｜预算与放大的因果链** — 预算自外向内递减、重试倍率自内向外连乘；两个方向同时成立，链子才稳。
+
+### 重试风暴的判据（怎么看出自己在制造它）
+
+| 症状 | 读数 | 为什么指向重试风暴 |
+|---|---|---|
+| 下游 QPS 涨、入口 QPS 没涨 | 两处的每分钟请求数对比 | 放大发生在中间跳，不在入口 |
+| 超时与错误同时上升再一起回落 | 时间轴上两条曲线的锯齿 | 一次抖动 → 全员重试 → 更抖 → 再重试 |
+| 恢复瞬间尖峰远大于故障期 | 上游侧 p99 与吞吐的突刺 | 积压的重试队列被同时释放 |
+| 重试全打在同一个坏实例 | 按实例分布的 5xx | 没有退避抖动，也没换实例 |
+
+四道的处理各不同：**指数退避 + 抖动**治锯齿；**只重试幂等且可重试的错误**（超时/5xx/连接失败；业务拒绝、4xx、风控拦截一律不重试）治"把 409 当网络错"；**预算继承**（把剩余 deadline 传下去，下一跳不许自己重算）治白做；**重试令牌桶**（每单元时间内最多补 N 次）治尖峰。
+
+> **它替代不了什么**：这套算术治的是"容量与延迟"，治不了"重复生效"。**写操作重试的终点是第 20 章那条幂等键**——没有幂等键的重试，算术再漂亮也是在赌运气。幂等与不可绕过的实现细节在 [第 20 章](./ch25-第20章-风控不可绕过.md)。
+
+## 13.5e 边界的守门：一条 AST 判据（本机实跑）
+
+操作步骤第 5 步"防回流"说的是最容易烂掉的一环：拆完三个月，有人从 router 里直接查了库。**职责**这件事没有编译器管——类型正确、测试全绿、页面正常，边界照样糊。本机可跑的最低成本判据不是引入新工具，是**用标准库读 import 语句**：它不额外装东西、不依赖运行时，只判"谁引用了谁"。
+
+```python
+"""check_layers.py —— 三层判据按 import 边判，不看函数名、不看注释"""
+import ast, pathlib, sys
+
+ALLOWED = {"routers": {"api", "domain", "services"},   # router 可以调 service，不能碰 repository
+           "services": {"domain", "repositories"},     # service 依赖仓储
+           "repositories": {"domain"},                 # 仓储不许反向引用
+           "domain": set()}                            # 领域层谁都不许被它牵住
+
+def layer_of(p):                                       # app/api/routers/x.py -> routers
+    return next((s for s in reversed(p.parts[:-1]) if s in ALLOWED), None)
+bad = []
+for f in pathlib.Path("app").rglob("*.py"):
+    layer = layer_of(f)
+    if layer:
+        for node in ast.walk(ast.parse(f.read_text())):          # 只看 import 节点，不看调用
+            mods = [node.module or ""] if isinstance(node, ast.ImportFrom) else \
+                   [a.name for a in node.names] if isinstance(node, ast.Import) else []
+            for mod in mods:
+                hit = [s for s in mod.split(".") if s in ALLOWED]
+                if hit and hit[0] not in ALLOWED[layer]:
+                    bad.append(f"{f}:{node.lineno}  {layer} -> {hit[0]}")
+print("\n".join(bad) or "无跨层违规"); print(f"违规数 = {len(bad)}")
+sys.exit(1 if bad else 0)
+```
+
+```text
+$ python3 tests/check_layers.py ; echo "EXIT=$?"     # 同一命令跑三次：干净树、注入 A、注入 B
+无跨层违规
+违规数 = 0
+EXIT=0
+--- 注入 A：AI 图快，让 router 直接拿数据访问（在 routers/coupons.py 顶部加一行 import）
+app/api/routers/coupons.py:1  routers -> repositories
+违规数 = 1
+EXIT=1
+--- 注入 B：仓储层反调 service（依赖倒流）
+app/repositories/coupon.py:1  repositories -> services
+违规数 = 1
+EXIT=1
+```
+
+两条注入都要试，**因为它们对应两种不同的糊法**：A 是"越过一层"，B 是"倒过来依赖"——只写 A 的判据会把 B 放过去，而 B 才是让 service 长出新 SQL 的那只手。三点边界要提前说清，否则这条判据会被误当成"分层已经守住了"：
+
+- **它只认 import 边，不认运行期的字符串路径。** `importlib.import_module("app.repositories.coupon")`、配置里反射出来的类名，它一概看不见。要覆盖这类通道，得连配置一起判——那是策略即代码的活，见 [第 19 章](./ch24-第19章-五层门禁.md)。
+- **它判的是"允许的方向"，不判"层内的职责"。** `services/coupon.py` 里自己算了个 HTTP 状态码，AST 层面无罪。**13.3 那句"service 不出现 SQL"，在这条判据里只能兑现成"不许出现仓储实现的引用"，到这一步为止。**
+- **它必须和行为侧的契约测试配对。** 一条管结构（谁能引用谁），一条管行为（拆完层返回不变，见 [第 10 章](./ch15-第10章-边界变测试.md)）。只有前一条，团队会把违规 import 改成动态导入绕过去——**被绕过的判据比没有判据更危险，因为它给所有人一个"已经守住了"的错觉。**
+
+三道闸的分工一句话说清：AST 方向闸与契约测试拦的是这次 PR（合并前），灰度对比监控拦的是这次上线（合并后）。前两道绿了不代表第三道可以省，顺序也不可交换——把灰度当结构闸用，等于让线上流量替你评审代码。
+
+---
+
 ## 13.6 四案例映射
 
 | 案例 | 单文件症状 | 拆分边界难点 | 协调成本 |

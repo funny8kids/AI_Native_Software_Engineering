@@ -176,6 +176,259 @@ flowchart LR
 - [ ] setup.py 垫片和旧路径入口，是不是和兼容层一起删了？
 - [ ] 拆除动作本身，有没有留下一条可追溯的变更记录？
 
+## 14.5b PEP 621 逐行注释：`pyproject.toml` 的每个字段在替谁做决定
+
+14.3 那份双跑配置示例只给了最小骨架。本节把立包当日的 `pyproject.toml` 逐行讲清：每个字段看着是元数据，实际都在替某个将来的动作做决定——缺一个字段，那个动作就会在半夜的构建日志里现形。
+
+> **档位声明**：字段语义按 PEP 621 与 setuptools 文档口径写（B 档），本节**没有**跑过任何构建或发布；但"这份文件能不能被正确解析成预期的结构"用了 Python 标准库自带的 `tomllib` 实测（本机实跑，Python 3.14.4，不装任何第三方包）。
+
+```toml
+# pyproject.toml —— 包配置的唯一事实来源（PEP 621）
+[build-system]
+requires = ["setuptools>=61"]            # 构建这次需要哪些模块；这是对"构建能力"的要求，不是运行时依赖
+build-backend = "setuptools.build_meta"  # 由谁来构建；换后端只动这两行，[project] 一字不改
+
+[project]
+name = "promo-rules-v2"                  # 分发名（内部源上可搜到的名字）；import 用的下划线名由后端映射得出
+version = "2.0.0"                        # 立包标准的落点：主版本号内不破坏兼容（见 14.5）
+requires-python = ">=3.11"               # 下限必须对齐"各域线上最低 Python"，写宽了装得上、跑不起
+dependencies = []                        # 运行时依赖：只写意图区间，不钉死精确版本（钉法见 14.5d）
+
+[project.optional-dependencies]
+dev = ["ruff>=0.5", "mypy>=1.10"]        # 开发工具链不是运行时依赖：混进 dependencies 会传染给所有域
+
+[project.urls]
+Homepage = "https://git.internal/platform/promo-rules-v2"   # "事实来源在哪"的机器可读入口
+
+[tool.setuptools.packages.find]
+where = ["src"]                          # src 布局：本机测试时不会因为当前目录遮蔽而 import 到旧同名包
+include = ["promo_rules_v2*"]            # 通配防误打包：域内实验目录不会被装进发布的轮子
+```
+
+三条判据，都源自"哪个字段写错了会疼"：
+
+1. **一个字段只许出现在一份文件里。** 分发名、版本、依赖在 pyproject 之外再出现一次（setup.py 参数、`__init__.py` 里的 `__version__`、CI 脚本里的硬编码），事实来源就裂成两份——14.3 那句"垫片文件不允许再出现任何包信息"就是这条的兑现。
+2. **版本要单一来源。** 若想让版本号只在代码或只在 tag 里存一份，用 `dynamic = ["version"]` 把决定权显式交给构建后端；**判据不是"用不用 dynamic"，而是"版本号有没有第二个手抄点"。**
+3. **`requires-python` 是和各域的接口。** 它写 `>=3.11`，就意味着任何还跑 3.10 的域永远装不上这个包——这个字段是"谁有资格迁过来"的机器可读版本，改它等于改迁移范围，要走评审，不许顺手。
+
+解析验证（本机实跑）：
+
+```text
+$ python3 -c "import tomllib; d = tomllib.load(open('pyproject.toml','rb')); print(sorted(d)); print(sorted(d['project']))"
+['build-system', 'project', 'tool']
+['dependencies', 'name', 'optional-dependencies', 'requires-python', 'urls', 'version']
+```
+
+再加一个"第二事实来源"探针——同一份文件里把 `name` 写两遍：
+
+```text
+$ printf '[project]\nname = "a"\nname = "b"\n' | python3 -c "import tomllib,sys; tomllib.loads(sys.stdin.read())"
+tomllib.TOMLDecodeError: Cannot overwrite a value (at line 3, column 11)
+```
+
+同文件内的第二份事实，TOML 当场拦下；**真正危险的第二事实来源住在另一份文件里**（setup.py、CI 脚本），没有任何解析器会跨文件对账——那只能靠 14.5c、14.5e 那两条机器判据来守。
+
+## 14.5c 判据行：ruff 与 mypy strict 各管什么（B 档）
+
+> **档位声明**：**本机没有安装 ruff，也没有安装 mypy**——`python3 -m ruff --version` 与 `python3 -m mypy --version` 均返回 `No module named ruff` / `No module named mypy`（这是本机实跑的"工具在场性"检查，不是工具输出）。**本节不声称跑过这两个工具、不贴它们的任何报错**，只按文档口径写配置与判据行；拿到你的 CI 里跑通之后，才允许升格成你们环境的读数。
+
+```toml
+[tool.ruff]
+target-version = "py311"        # 必须与 requires-python 下限一致，否则 lint 结论和运行环境脱节
+line-length = 100               # 交给格式化器执行，人不在这条上吵架
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I", "UP"]   # 判据行一：F 与 B 不许关
+[tool.ruff.lint.per-file-ignores]
+"src/promo_rules/*" = ["F401"]         # 判据行二：豁免只精确到"兼容层路径 × 具体规则号"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true                          # strict 是一组开关的打包名，不是一种新检查
+```
+
+判据行一：`select` **至少含 `F` 与 `B`。** 本章的病因是 AI 搬运——搬运最容易留下的正是未用的 import、未用的变量、复制错作用域的名字，这些全在 `F` 的射程里；`B`（bugbear）管的是"看起来对、实际上错"的形状。`E` 里大半是风格，和格式化器重复，不必逐条争论。
+
+判据行二：**每条 ignore 都必须带路径限定。** 全局关一条规则，等于给全仓所有人发通行证；写成"兼容层目录 × F401"这种精确豁免，兼容层一拆（14.5e 的拆除判据），这行配置跟着删——**配置的寿命和它服务的代码绑定，这就是"临时"两个字的机器形态。**
+
+`strict = true` 的构成（按 mypy 文档口径）大致是：所有函数必须有完整注解（未注解即报错，而不是静默免检）、禁止隐式 `Any`、泛型不许裸用、`NoReturn`/`object` 收紧、未 re-export 的名字不许从包外 import。**判据行三：strict 用白名单渐进——`files = [...]` 只列新包，这张清单只许变短不许变长**（和 13.5e 那条目录清单同一条纪律）。
+
+判据行四：**老包不套 strict，新包必须。** 双跑期的新包是唯一事实来源，它的类型面就是将来所有域的依赖面；shim 目录不写注解——**给一段注定被删除的代码补注解，是把迁移成本排到了拆除成本前面。**
+
+判据行五：`ignore_missing_imports` 这类 per-module 豁免只给没有类型标记的第三方库，**永远不给自家另一个域的模块**——自家模块之间的缺口是契约问题（第 9 章），不是配置问题。
+
+> **它替代不了什么**：ruff/mypy 判的是"这份代码自洽且类型面完整"，判不了"这份逻辑是不是全平台唯一的那份"。**14.2 的病因是复制，lint 治不了复制**——能治它的是 14.7 第一条那个跨域扫描。接线位置在门禁层，静态规则如何进流水线各层，见 [第 19 章](./ch24-第19章-五层门禁.md)。
+
+## 14.5d 依赖锁定与可重现构建：把"当时能装"变成"永远能装"
+
+立包之后出现一类新的不确定性：pyproject 写的是**意图**（`setuptools>=61`），而一次成功的构建依赖的是**某个具体解析结果**。中间这段距离，要靠分层来管：
+
+| 层 | 回答的问题 | 落在哪件东西上 | 什么时候失效 |
+|---|---|---|---|
+| 意图层 | 这个包需要什么样的依赖 | pyproject 的区间声明 | 几乎不失效，人评审它 |
+| 解析层 | 这次到底装哪个版本 | 锁文件里的精确版本集 | 解释器/平台标记变了就要重解 |
+| 内容层 | 解析到的还是不是那份代码 | 哈希摘要 | 上游重新发布同版本包时 |
+
+三层各自的判据：
+
+1. **锁不许跨包边界。** 应用仓（各域的服务）必须从锁文件装；**库包只声明区间，锁文件不进发布物**——包一旦把锁带出去，就把全平台的依赖图钉死在自己那一份解析结果上，"被多个域复用"立刻变质为"替所有域做决定"。
+2. **关于"可重现"有三档，先宣布做到哪一档。** 同一锁文件 + 同一解释器版本 + 同一平台 ⇒ 装出同一组包；这再往上才是"轮子逐字节一致"，那牵进构建路径、时间戳、压缩参数等一整套因素——**本章范围内不承诺它，也不要对 AI 说"给我可重现构建"却不指明是哪一档**，它会替你选最难的那档。
+3. **锁 PR 的大小本身要受评审预算约束。** AI 批量升依赖时，一次 PR 的版本变更数超过人可核对的量，就把回滚粒度做没了——**要能单撤一个包，就像 14.5e 要求能单撤一个域。** 回滚通路的画法见 [第 21 章](./ch26-第21章-对账灰度回滚监控.md)。
+
+> **档位声明**：本机有 pip（26.2.1）但本节写作全程未安装任何包、未联网取数，因此不出示安装类读数；`--require-hashes` 之类参数一律按 pip 文档口径描述，升格与否取决于你的 CI。
+
+## 14.5e 把双跑真正跑起来：shim、`sys.modules` 换名与 meta_path 钩子（本机实跑）
+
+> **档位声明**：本节所有代码与输出在本机跑过（Python 3.14.4，只用标准库，无第三方包）。目录形状：`src/promo_rules_v2/`（新包，事实来源）、`src/promo_rules/`（shim，只余 `__init__.py` 与一个旧子模块）、`src/compat_hook.py`（meta_path 钩子）、`domain_a/`、`domain_b/`（两个未迁域）。
+
+第一步，包级 shim——旧路径 `import promo_rules` 仍然可用，但只警告一次、然后把名字整个交出去：
+
+```python
+# src/promo_rules/__init__.py —— 兼容层 shim：旧 import 路径仍可用，但只活到迁移完成
+import sys
+import warnings
+
+from promo_rules_v2 import full_reduction as _full_reduction   # 事实来源在 v2，这里只做再导出
+from promo_rules_v2 import VERSION as _VERSION
+
+warnings.warn(
+    "promo_rules 已弃用，请改 import promo_rules_v2（拆除条件见第 14 章兼容层台账）",
+    DeprecationWarning,
+    stacklevel=2,                       # 指向调用方那一行，不是这一行——警告要报对门
+)
+
+sys.modules[__name__] = sys.modules["promo_rules_v2"]   # ★ 钩子：旧名字直接指向新模块对象
+```
+
+`sys.modules` 换名这行是整个兼容层的心脏：**此后 `promo_rules` 与 `promo_rules_v2` 是同一个对象**，不存在"两份实现各自热着"的双跑漂移——真正的双跑只有"新旧路径"，永远没有"新旧逻辑"。而模块体只执行一次，所以警告天然只响一次，不会刷屏到让人去全局静音。
+
+子路径（`import promo_rules.coupon`）光靠 shim 盖不住，补一个 `sys.meta_path` 钩子：
+
+```python
+# src/compat_hook.py —— 把整棵旧子路径 promo_rules.* 映射到 promo_rules_v2.*
+import importlib
+import sys
+import warnings
+
+PREFIX_OLD, PREFIX_NEW = "promo_rules.", "promo_rules_v2."
+_warned = set()                       # 每个别名只警告一次——重复刷屏会让人把警告整体关掉
+
+class AliasFinder:
+    def find_spec(self, fullname, path=None, target=None):
+        if not fullname.startswith(PREFIX_OLD):
+            return None               # 不归我管，交回正常解析链
+        real = PREFIX_NEW + fullname[len(PREFIX_OLD):]
+        mod = importlib.import_module(real)         # 真正的解析交给新包
+        if fullname not in _warned:
+            _warned.add(fullname)
+            warnings.warn(f"{fullname} 已弃用，请改 import {real}",
+                          DeprecationWarning, stacklevel=2)
+        sys.modules[fullname] = mod                 # 旧名字挂上新模块，之后走缓存
+        return mod.__spec__
+
+sys.meta_path.insert(0, AliasFinder())
+```
+
+两个未迁域照常 import 旧路径（`domain_a/service.py` 用 `from promo_rules import full_reduction`，`domain_b/job.py` 用 `from promo_rules.coupon import clamp_gap`），跑起来：
+
+```text
+$ python3 run_demo.py            # 本机实跑，Python 3.14.4
+域 A 走旧路径        : 22000
+第二次 import 同一路径: 22000
+域 B 走旧子路径      : 3000
+警告条数 = 2
+   - DeprecationWarning: promo_rules 已弃用，请改 import promo_rules_v2（拆除条件见第 14 章兼容层台账） | 触发文件: service.py
+   - DeprecationWarning: promo_rules.coupon 已弃用，请改 import promo_rules_v2.coupon | 触发文件: job.py
+旧名字就是新模块 : True | VERSION = 2.0.0
+sys.modules 读数 : promo_rules_v2 | 子路径读数: promo_rules_v2.coupon
+```
+
+四行读数各对一个主张：**业务结果照常**（22000，旧路径没有改变任何行为）、**警告每别名一次**（两条，各来自一个域）、**换名彻底**（`is` 为真、`VERSION` 是 v2 的）、**旧名字在新事实里不留位置**（sys.modules 里查到的是新模块的 `__name__`）。双跑期一个旧名的 import 到底走了哪几步，画在图 14-3 里——注意钩子只在"第一次"出现，之后那条缓存边才是常态。
+
+```mermaid
+flowchart LR
+  IMP[旧代码<br/>import promo_rules.coupon] --> HOOK{meta_path 钩子<br/>命中前缀?}
+  HOOK -->|是| REAL[解析 promo_rules_v2.coupon]
+  REAL --> WARN[登记 _warned 并警告一次]
+  WARN --> NAME[sys.modules 旧名 = 新模块]
+  NAME --> RUN[拿到同一个对象<br/>逻辑只有一份]
+  IMP -.同名第二次 import.-> CACHE[直接命中缓存<br/>不再警告 不重执行]
+  CACHE --> RUN
+  style HOOK fill:#fcefd3,stroke:#9d6127,color:#1e1c19
+  style WARN fill:#f1ebde,stroke:#2f6154,color:#1e1c19
+  style RUN fill:#e2f3df,stroke:#3e7247,color:#1e1c19
+```
+
+**图 14-3｜双跑期的 import 解析链** — 钩子只在第一次出场：翻译名字、留下警告、把旧名挂到新模块上；之后一切走缓存，逻辑自始至终只有一份。
+
+### 三个失效面：本机真撞上的那种
+
+1. **旧名字名下的子模块，在新包里一个都不会多出来。** shim 换名后，旧包的命名空间跟着新包走：
+
+```text
+$ python3 run_failures.py            # 本机实跑（前两行是那次 import 的警告回显）
+DeprecationWarning: promo_rules 已弃用，请改 import promo_rules_v2（拆除条件见第 14 章兼容层台账）
+换名后 __path__ = ['/tmp/ch19/src/promo_rules_v2']
+FAIL promo_rules.only_old -> ModuleNotFoundError: No module named 'promo_rules_v2.only_old'
+OK   promo_rules_v2.coupon
+```
+
+   旧包留在磁盘上的 `only_old.py` 反而变得不可达——**兼容层不创造逻辑，它只转送逻辑**；旧实现里没进新包的部分，不会从路径里长出来。这正是 14.5 检查清单第一条要机器化的原因。
+2. **钩子文件不许住在它换名的那个包里。** 把 `compat_hook.py` 挪进 shim 目录再 import：
+
+```text
+$ python3 -c "import sys; sys.path.insert(0,'src'); import promo_rules; import promo_rules.legacy_hook"
+ModuleNotFoundError: No module named 'promo_rules.legacy_hook'
+```
+
+   钩子安装完成之前，旧名字已经被换掉了——**兼容层不能在自己要改造的命名空间里 bootstrap 自己**，安装入口必须留在旧命名空间之外。
+3. **默认设置下，这枚警告你在生产日志里根本看不见。** Python 的默认过滤器会对 `__main__` 之外的 `DeprecationWarning` 保持安静——这是特性（不扰民），也是坑（不报到 CI 上）。把警告升成红灯是可跑的：
+
+```text
+$ PYTHONPATH=src:. python3 -W error::DeprecationWarning -c "import domain_a.service" ; echo "EXIT=$?"
+DeprecationWarning: promo_rules 已弃用，请改 import promo_rules_v2（拆除条件见第 14 章兼容层台账）
+EXIT=1
+$ # 域 A 是它目录里最后一个旧 import；把那一行改成 promo_rules_v2 后重跑同一条命令
+$ PYTHONPATH=src:. python3 -W error::DeprecationWarning -c "import domain_a.service" ; echo "EXIT=$?"
+EXIT=0
+```
+
+   判据行：**红灯挂在"尚未迁移的域"的 CI 任务上，不挂全仓**——全仓红灯第一天就会被静音，等于没有灯；每迁完一个域，摘一个域的灯，灯的数量就是迁移进度。
+
+### 拆除判据：旧路径引用数要数得出来
+
+14.5 检查清单第一条问"所有调用方都迁了吗"。靠目录翻是翻不动的，用标准库数 import（本机实跑）：
+
+```python
+# scan_callers.py —— 旧路径引用清单：只认 import 语句，与 13.5e 的 AST 闸同源
+import ast, pathlib, sys
+OLD = sys.argv[1] if len(sys.argv) > 1 else "promo_rules"
+hits = []
+for f in sorted(pathlib.Path(".").rglob("*.py")):
+    for n in ast.walk(ast.parse(f.read_text())):
+        mods = [(n.module or "")] if isinstance(n, ast.ImportFrom) else \
+               [a.name for a in n.names] if isinstance(n, ast.Import) else []
+        for m in mods:
+            if m == OLD or m.startswith(OLD + "."):
+                hits.append(f"{f}:{n.lineno}  import {m}")
+print("\n".join(hits) or "无旧路径调用方")
+print(f"仍走旧路径的 import 语句数 = {len(hits)}")
+sys.exit(1 if hits else 0)
+```
+
+```text
+$ python3 scan_callers.py promo_rules ; echo "EXIT=$?"      # 本机实跑
+domain_a/service.py:1  import promo_rules
+domain_b/job.py:1  import promo_rules.coupon
+run_demo.py:18  import promo_rules
+run_failures.py:4  import promo_rules
+仍走旧路径的 import 语句数 = 4
+EXIT=1
+$ # 把 domain_a/service.py 那一行迁成新路径后再跑：计数 4 变 3，EXIT 仍为 1
+```
+
+两个已知盲区，与 13.5e 那条 AST 判据一字不差：**运行期的字符串路径它看不见**（`importlib.import_module("promo_rules.coupon")` 照样能过），**它只数引用、不判语义**（迁了 import 行但还从兼容层拿私有名字，计数上看不出来）。所以这张清单必须和 14.5e 那条警告台账配对使用：**清单数出"还有几处要迁"，警告台账数出"迁完的还在偷用"。** 两个数同时归零，检查清单第一条才算绿灯。
+
 ---
 
 ## 14.6 四案例映射

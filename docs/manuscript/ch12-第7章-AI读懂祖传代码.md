@@ -219,6 +219,284 @@ exit ${fail:-0}
 
 ---
 
+## 7.5e 检索地基第一件：切块要按符号，不是按行数（本机实跑）
+
+7.3 的三种考古法共享一个前提，而它从没被单独拆开讲过：**先把上千行代码里相关的那一片捞出来，递给模型**。命中率的第一杠杆不是模型大小，是切块的形状。7.5b 那张表里"D1 下午抓结构"要做对的就是这一步——这一步做歪，后面每一步都在错误的地基上自信。
+
+本卡 A 档现场：本机实跑，Python 3.14。样本是给 7.1 那个清洗服务做的 37 行迷你替身（保留它的三个要害：模块级常量、藏在函数体里的注释、万能函数名）：
+
+```python
+"""支付对账清洗服务：从主库读流水，清洗后写结果表。"""
+import csv
+
+BATCH_COL = 2          # 第三列是批次号，不是金额——前任留下的唯一线索
+SKIP_IDX = 2
+
+def load_rows(path):
+    rows = []
+    with open(path, newline="") as fh:
+        for raw in csv.reader(fh):
+            rows.append(raw)
+    return rows
+
+def clean_row(row):
+    out = []
+    for i, cell in enumerate(row):
+        if i == SKIP_IDX:
+            continue   # 跳过列：真因是对账批次号，见 BATCH_COL 注释
+        out.append(cell.strip())
+    return out
+
+def hedge_split(rows):
+    left, right = [], []
+    for r in rows:
+        if r[BATCH_COL].startswith("H"):
+            right.append(r)   # H 前缀批次走跨账户对冲分支
+        else:
+            left.append(r)
+    return left, right
+
+def write_result(rows, path):
+    with open(path, "w", newline="") as fh:
+        csv.writer(fh).writerows(rows)
+
+def run(src, dst):
+    left, right = hedge_split(load_rows(src))
+    write_result([clean_row(r) for r in left + right], dst)
+```
+
+两种切法的对照器（token 列先声明是字符估算，口径在 7.5h 讨论）：
+
+```python
+#!/usr/bin/env python3
+"""切块对照：按行定宽 vs 按符号（ast）。token 数为字符估算（示例口径，非分词器实测）。"""
+import ast, pathlib, sys
+src = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+lines = src.splitlines()
+W = int(sys.argv[2]) if len(sys.argv) > 2 else 30   # 窗口宽度（行）
+
+print("== 按行定宽切块（无重叠）==")
+for i in range(0, len(lines), W):
+    body = "\n".join(lines[i:i + W])
+    head = lines[i]
+    print(f"  chunk-{i//W+1}  行 {i+1:>2}-{i+len(lines[i:i+W]):<3} 首行: {head[:34]:<36} 约 {len(body)//4:>3} tok(估)")
+
+print("== 按符号切块（ast 顶层 def/class）==")
+tree = ast.parse(src)
+for node in tree.body:
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        a, b = node.lineno, node.end_lineno
+        body = "\n".join(lines[a - 1:b])
+        sig = lines[a - 1].strip()
+        print(f"  {node.name:<12} 行 {a:>2}-{b:<3} 签名: {sig[:36]:<38} 约 {len(body)//4:>3} tok(估)")
+```
+
+真实输出（stdout 逐字）：
+
+```text
+$ python3 chunk.py recon_clean.py 15
+== 按行定宽切块（无重叠）==
+  chunk-1  行  1-15  首行: """支付对账清洗服务：从主库读流水，清洗后写结果表。"""       约  73 tok(估)
+  chunk-2  行 16-30  首行:     for i, cell in enumerate(row):   约  95 tok(估)
+  chunk-3  行 31-37  首行: def write_result(rows, path):        约  59 tok(估)
+== 按符号切块（ast 顶层 def/class）==
+  load_rows    行  7-12  签名: def load_rows(path):                   约  38 tok(估)
+  clean_row    行 14-20  签名: def clean_row(row):                    约  48 tok(估)
+  hedge_split  行 22-29  签名: def hedge_split(rows):                 约  54 tok(估)
+  write_result 行 31-33  签名: def write_result(rows, path):          约  28 tok(估)
+  run          行 35-37  签名: def run(src, dst):                     约  31 tok(估)
+```
+
+读法只有一处要害：看定宽切法的 chunk-2，**首行是 `    for i, cell in enumerate(row):`——一个没有名字的循环**。它的函数签名在上一块，它依赖的 `SKIP_IDX` 定义也在上一块。检索一旦命中这个块，模型拿到的是"某段不知道属于谁的循环体"，此时它唯一的补全材料是命名猜测——**7.3 里"第三列是内部标记位"那条幻觉推测，机械根源就在这类边界上**。符号切法用 `ast` 的 `lineno`/`end_lineno` 保证每个 `def` 自带签名与完整函数体，注释跟着代码走（跳过列的真相就在 clean_row 体内那行注释里）。
+
+代价与边界，三条：符号切块需要每种语言各一把解析器（第 5 章 5.5e 的 `ast` 就是 Python 那把）；函数之间的游离注释和模块级语句会掉在块缝里，得像本样本这样单独立一个"模块头"块；块大小不均把压力转移到预算那头——正好是 7.5h 的主题。
+
+一句话收束：**按行切块省下的边界功夫，会在模型的脑补里加倍偿还。**
+
+---
+
+## 7.5f 检索地基第二件：关键词与向量两个通道，各自漏得很不一样
+
+块备好了，下一个问题是：提问进来，返回哪几块。**两个通道的漏法互补，所以先各自看清怎么漏，再谈混合。**
+
+关键词通道本机实跑——对 7.5e 的符号块做词频打分（BM25 的最小替身，行为一致、能看清就够）：
+
+```python
+#!/usr/bin/env python3
+"""关键词通道：对按符号切好的块做词频打分（BM25 的最小替身，够看清行为）。
+检索词按空白切分——中文要事先分好词，这本身就是关键词通道的一半成本。"""
+import ast, pathlib
+src = pathlib.Path("recon_clean.py").read_text(encoding="utf-8")
+lines = src.splitlines()
+chunks = {}
+tree = ast.parse(src)
+for node in tree.body:
+    if isinstance(node, ast.FunctionDef):
+        chunks[node.name] = "\n".join(lines[node.lineno - 1:node.end_lineno])
+chunks["<模块头>"] = "\n".join(lines[:6])
+
+def score(query, chunk):
+    return sum(chunk.count(t) for t in query.split())
+
+for q in ["跳过 第三列 批次号", "为什么要忽略某一列"]:
+    print(f"查询：{q!r}")
+    ranked = sorted(chunks, key=lambda c: -score(q, chunks[c]))
+    for c in ranked[:3]:
+        s = score(q, chunks[c])
+        print(f"  {c:<12} 得分 {s}" + ("　← 命中" if s else ""))
+    if all(score(q, b) == 0 for b in chunks.values()):
+        print("  （全零：关键词通道对改写型提问一无所获——这就是向量通道存在的理由）")
+```
+
+真实输出（stdout 逐字）——一个查询命中、一个全军覆没：
+
+```text
+$ python3 kwsearch.py
+查询：'跳过 第三列 批次号'
+  clean_row    得分 2　← 命中
+  <模块头>        得分 2　← 命中
+  load_rows    得分 0
+查询：'为什么要忽略某一列'
+  load_rows    得分 0
+  clean_row    得分 0
+  hedge_split  得分 0
+  （全零：关键词通道对改写型提问一无所获——这就是向量通道存在的理由）
+```
+
+第一条查询用到了代码注释里真实出现过的词，所以命中；第二条问的是同一件事，**一个词都没对上，得分整体为零**——考古提问恰恰多半是改写型的：提问的人和你一样不知道代码里的行话。向量通道就是为这一类提问存在的：把提问与块嵌进同一向量空间按相似度召回，同义改写能进来。**本机没有嵌入模型与向量库，这一通道未实测**——B 档纪律，这里只允许写定位与代价：向量买到的是改写召回，交出去的是可解释性（"为什么这块排第一"回答不出词级依据），而且代码语料冷启动质量完全取决于切块形状（回到 7.5e）。
+
+| 维度 | 关键词通道 | 向量通道 |
+|------|-----------|---------|
+| 命中依据 | 可审计：命中哪几个词、出现几次 | 相似度分数，排序理由不可逐词复述 |
+| 改写提问 | 几乎必漏（上面的全零样本） | 主要卖点 |
+| 行话提问 | 主场 | 同样能进，但可能被"语义相近的无关块"截胡 |
+
+混合的落地不是调权重玄学，是先定分工再融合排名：**关键词通道负责可审计的证据，向量通道负责召回；两路结果做名次融合后仍要过 7.5i 的引用机检**。单通道检索写进考古报告时，必须自报盲区——拿全零的关键词结果当"仓库里没有相关代码"的证据，是这条链路上最省钱的翻车方式。
+
+---
+
+## 7.5g 检索地基第三件：LSP 是那条"确定的边"
+
+问答法最高频的一类提问是"这个函数被谁调用"。**这类问题的答案是一个可枚举的集合，可枚举的事实用枚举，不许用概率。** 枚举的工具是语言服务协议里的引用查询（`textDocument/definition`、`textDocument/references` 一类请求，返回带文件与行列的位置清单）——按 B 档口径写：协议形状如此，本机没有起语言服务器进程，未实测任何一份真实返回。
+
+它在考古工作流里的位置是一条纪律，不是一次调用。提问涉及调用关系 → 先跑索引查询，把返回的位置清单作为**确定的边**装进 7.5h 的上下文包；清单为空 → 这个空也是证据，但要带口径入档（索引器覆盖这个语言吗、查询词落在哪个符号上），"**查无引用"和"没查到"是两句话**"，把后者写成前者，就是一次静默失效；清单非空但很长 → 按调用方所在目录与资金链路加权截断，截断规则写进上下文包的 `truncated` 字段。
+
+失效面说在前面：动态派发、按字符串装配的调用、跨进程的消息名——这些边从协议层就不存在，**和 7.5e 的注释一样，确定的边也是边的子集**（第 5 章 sample2 那条 `import_module` 动态边，LSP 同样不报）。所以调用关系问题的完整证据 = 引用清单 + "本工具链看不见的边类"声明，两者一起进上下文包，缺声明的清单会教出过度自信的结论。引用查询靠全仓索引，索引要随提交刷新——它的增量失效面和第 5 章 5.5g 是同一族问题（清单漂移、静默跳过），治理也共用那三条纪律，不另起炉灶。
+
+---
+
+## 7.5h 上下文包与 token 预算：预算这笔算术（本机实跑）
+
+一次考古提问的产出质量上限，约等于检索质量乘以装进上下文的证据量——**上下文包（context pack）就是这次提问随身带的证据清单**，它是第 1 章说的那个组织资产的最小形态。形状先给一个可抄的（示意字段）：
+
+```yaml
+id: ctx-pay-recon-001            # 每次提问一个包，包 ID 进考古笔记留痕
+question: 清洗为什么跳过第三列
+repo: pay-recon-cleaning
+revision: <commit-hash>          # 钉死修订：检索结果必须可复现
+budget_tokens: 3000              # 示例预算，不是标准
+chunks:                          # 按置信度降序；超预算从尾部裁
+  - {file: recon_clean.py, span: [1, 6],  from: symbol-index, hits: 2}
+  - {file: recon_clean.py, span: [14, 20], from: keyword, note: 含原始注释}
+  - {file: recon_clean.py, span: [22, 29], from: vector, note: 待人核}
+certain_edges:                   # 7.5g 的确定边原样附上
+  - {query: references, result: <位置清单或「空+口径声明」>}
+inventory_row: {money_path: 1, owner: 无主·待处置}
+```
+
+预算得先能量出来。两种量法必须分清：**分词器实测**（拿模型提供方的 tokenizer 数 token，准，但换模型换字典）和**字符估算**（粗、便宜、够排序）。本机实跑字符估算这条——把上面包体的三个块装进 `ctx_pack.txt`，量一次：
+
+```text
+$ python3 -c "
+from pathlib import Path; pack = Path('ctx_pack.txt').read_text(encoding='utf-8'); n = len(pack)
+print('上下文包字符数（含标签）:', n); print('粗估 token（字符/4，示例口径，非分词器实测）: ≈', n // 4); print('预算 3000:', '放得下' if n // 4 <= 3000 else '超预算')"
+上下文包字符数（含标签）: 416
+粗估 token（字符/4，示例口径，非分词器实测）: ≈ 104
+预算 3000: 放得下
+```
+
+口径丑话写在读数旁边：`字符/4` 是英文文本惯用的粗算，对中文内容明显偏乐观（中文一字多 token），**它只配用来排序"哪个块该先扔"，不配用来出账单**；出账与限额判定用提供方分词器实测，与第 1 章定的 token 预算量法对齐（[第 1 章](./ch06-第1章-AI原生不是让AI写代码.md)）。真正会进上下文的是模型提供方的计费读数，本站的估算只是让裁剪有据可依。
+
+超预算时的裁剪顺序是制度不是临场：先裁外围仓库块，再裁 `from: vector` 的低置信块，**永不裁提问对象块本体、永不裁 inventory 行与"不可碰"声明**——裁掉后者，模型会在不知道自己缺证据的情况下给出流畅的错误。裁完还超，说明这个问题本身太大：改问题、或者拆成两次提问，不许悄悄把块截半（截半又回到 7.5e 的循环体惨案）。整条链——切块、双通道检索、确定边、预算裁剪、引用机检——串起来就是图 7-3。顺着读：左侧两个通道加 `ast` 符号索引喂装配，预算关不过就在环里裁块，出库的草稿必须过引用机检，检不过的结论落回推测表：
+
+```mermaid
+flowchart LR
+  Q[考古提问] --> KW[关键词通道]
+  Q --> VE[向量通道]
+  SY[符号索引] --> KW
+  KW --> PK[上下文包装配]
+  VE --> PK
+  SY --> PK
+  PK --> BUD{token 预算核查}
+  BUD -->|超了| CUT[裁低置信块]
+  CUT --> PK
+  BUD -->|放行| DRAFT[AI 草稿 带落地引用]
+  DRAFT --> CHK{引用机检}
+  CHK -->|不可核对| TAG[降级回推测表]
+  CHK -->|可核对| NOTE[进人工核验]
+  style BUD fill:#fcefd3,stroke:#9d6127,color:#1e1c19
+  style CHK fill:#f1ebde,stroke:#2f6154,color:#1e1c19
+```
+
+**图 7-3｜上下文包组装与证据闭环** — 检索、预算、机检三道关各拦各的：块不对、钱超了、话没证据，三道关缺一道，AI 的自信就会冒充考古的产出。
+
+---
+
+## 7.5i 检索缺证据时，用机检拦住 AI 的推断
+
+7.3 那三个"看似合理"的结论，发生在没有检索约束的年代；如今地基有了，还要补最后一道闸：**草稿里的每条"事实"必须带 `文件名:行号` 的落地引用，引用逐条机器核对**。本机实跑这套——先给一份混着两种典型幻觉的 AI 草稿：
+
+```text
+AI 考古草稿（示意结论，非事实）：
+1. 清洗时跳过第 3 列，因为它是批次号而非金额（依据 recon_clean.py:18）。
+2. H 前缀批次走跨账户对冲分支（依据 recon_clean.py:88）。
+3. 主循环入口在 recon_clean.py:35。
+4. 重试逻辑见 retry_helper.py:12。
+```
+
+机检脚本与真实输出：
+
+```python
+#!/usr/bin/env python3
+"""引用机检：AI 考古草稿里的每条 file.py:NN 依据，逐条对照真实仓库。
+判据：文件必须存在；行号必须落在 1..总行数。
+不满足任何一条 = 该结论降级回「推测」，不进笔记。"""
+import pathlib, re, sys
+
+answer = pathlib.Path("ai_draft.md").read_text(encoding="utf-8")
+pat = re.compile(r"([A-Za-z0-9_./-]+\.py):(\d+)")
+ok = bad = 0
+for m in pat.finditer(answer):
+    f, no = m.group(1), int(m.group(2))
+    p = pathlib.Path(f)
+    if not p.exists():
+        print(f"[红] {f}:{no} —— 文件不存在"); bad += 1; continue
+    total = len(p.read_text(encoding="utf-8").splitlines())
+    if not 1 <= no <= total:
+        print(f"[红] {f}:{no} —— 行号越界（该文件共 {total} 行）"); bad += 1; continue
+    print(f"[绿] {f}:{no}"); ok += 1
+print(f"合计：{ok} 条可核对，{bad} 条不可核对。")
+sys.exit(1 if bad else 0)
+```
+
+```text
+$ python3 check_citations.py; echo "退出码 $?"
+[绿] recon_clean.py:18
+[红] recon_clean.py:88 —— 行号越界（该文件共 37 行）
+[绿] recon_clean.py:35
+[红] retry_helper.py:12 —— 文件不存在
+合计：2 条可核对，2 条不可核对。
+退出码 1
+```
+
+两条红各代表一种幻觉形态：**行号编造**（这个文件总共 37 行，它引到 88）与**文件整个编造**（仓库里从来没有 retry_helper）。注意第 2 条草稿的"事实"其实蒙对了方向——机检不看方向，只看依据；**推断就算碰对了，也照样被拦**，因为对一次的推断和错一次的推断在证据上无法区分，这正是 7.5c 那条"状态由证据决定，不由措辞决定"的机器化。
+
+闸接在状态机的哪里：红 → 该结论自动降级为「推测」，写回 7.5c 笔记模板的推测表，**没有落地依据的推断可以进笔记，但只能进推测那一列**；绿 → 才配走 7.5b D5 那一步的人工核验。
+
+它的天花板也钉死在这里：机检证明的是"这个位置存在一行"，不是"这一行支持这个结论"——真行号配错解读，任何 lint 都拦不住，那是 7.5d 抽查回炉的活。同一套"引用必须可核对"的断言在 AI 评审流水线上有更完整的形态，评测侧的闸门见第 24 章（[第 24 章](./ch29-第24章-AI评审与幻觉处理.md)），提示词的引用约束在附录 A 的骨架里作为必填项（[附录 A](./ch39-附录A-提示词库骨架.md)）。
+
+---
+
 ## 四案例映射
 
 | 案例 | 祖传代码的核心风险 | AI 考古推断型幻觉的典型表现 | 隐性知识显性化的核心产出 |

@@ -2,7 +2,7 @@
 
 > 规则：技术图 = Mermaid；封面/卷首/头图 = 抽象位图（无文字）。可读对象 ≤12（定义见 `BOOK_SPEC.md` §9）。术语见 `GLOSSARY.md`。
 > **本表的图数、图号、图型三列由 `python3 scripts/check_figures.py --print` 从手稿实测生成，不手写。**
-> 最近一次刷新：2026-09-25。实测结论：**107 张技术图**（手稿 43 个文件 104 张 + 站点页 3 张），**107/107 通过浏览器端 `mermaid.parse` 全量校验，0 语法错误**；守卫同时判定每章 2–5 张、图号按阅读顺序递增、图注与图一一对应、节点上限全部达标、**图注编号全书唯一**（2026-09-25 新增的第三条判据；上一轮这张表里有 107 条图注却只有 102 个唯一编号，见文末"下一轮"第 2 条）。
+> 最近一次刷新：2026-09-25（逐章扩写那一轮之后，图数从 107 涨到 148）。实测结论：**148 张技术图**（手稿 43 个文件 145 张 + 站点页 3 张），**148 张全部在真浏览器里画成了 svg**——这句话的判据是第七条守卫每一页都在验的那条等式「该页 markdown 围栏数 = 已渲染并量到字号的图数」（全站 148 = 148），不是某一次 `mermaid.parse` 的回忆；本行旧版写的「107/107 通过浏览器端 `mermaid.parse` 全量校验」是扩写前的一次性读数，新增的 41 张图它没量过，所以按现在量到的口径重写。同日另用一支独立探针把三口径并排量了一遍（md 围栏 / DOM 容器 / 可用 svg，`console.error` 与未捕获异常一并收），日志在 `/tmp/mm_render.log`；守卫同时判定每章 2–5 张、图号按阅读顺序递增、图注与图一一对应、节点上限全部达标、**图注编号全书唯一**（148 条图注 / 148 个唯一编号——这条判据也是 2026-09-25 新增的，立闸当天表里是 107 条图注却只有 102 个唯一编号，见文末"下一轮"第 2 条）。
 > 配套：`python3 scripts/check_links.py`（**要先起本地服务**：`python3 -m http.server 8080 --directory docs`——它把每条本地引用换成真实 HTTP 请求，所以没有服务就没有判据）→ 去重后的全部本地引用 URL 均 HTTP 200、死链 = 0；**引用条数随正文增删而变，以命令自己打印的那一行为准**，这里不写死。它的失败方向也记一笔：服务没起时它把**全部**引用报成死链并退出 1，不会把"取不到"洗成"通过"。已用两条假链做过变异自检，确认守卫会红。图在窄屏是否被缩糊由第六条守卫 `check_mobile.py --report` 逐图给 `viewBox / 渲染宽 / 缩放`；**图上的字能不能读清、以及宽图宽表有没有"还能滚"的暗示，由第七条守卫 `check_legibility.py` 把住**——它按每张图自己的 `viewBox` 与自然字号解出所需宽度，判据是「任意视口下有效字号 ≥11px」+「每个需横向滚动的容器都挂了随 `scrollLeft` 更新的边缘暗示，且暗示层不吃点击」，`--report` 逐图给 `自然字号 / 有效字号 / 缩放`，`--screenshot DIR` 出逐图截图。
 
 ## 每文件图数（实测）
@@ -15,34 +15,34 @@
 | ch03-案例时间线 | 2 | TL-1、TL-2 | flowchart/gantt |
 | ch04-角色设定卡 | 3 | PS-1、PS-2、PS-3 | flowchart |
 | ch05-数字清单 | 2 | N-1、N-2 | flowchart |
-| ch06-第1章-AI原生不是让AI写代码 | 3 | 1-1、1-2、1-3 | flowchart |
-| ch07-第2章-人在回路 | 3 | 2-1、2-2、2-3 | flowchart/state |
-| ch08-第3章-人机分工 | 2 | 3-1、3-2 | flowchart/sequence |
+| ch06-第1章-AI原生不是让AI写代码 | 4 | 1-1、1-2、1-3、1-4 | flowchart |
+| ch07-第2章-人在回路 | 4 | 2-1、2-2、2-3、2-4 | flowchart/state |
+| ch08-第3章-人机分工 | 3 | 3-1、3-2、3-3 | flowchart/sequence |
 | ch09-第4章-AI原生工程栈 | 3 | 4-1、4-2、4-3 | flowchart/gantt |
-| ch10-第5章-大规模考古画图 | 3 | 5-1、5-2、5-3 | flowchart |
-| ch11-第6章-跨团队依赖分析 | 2 | 6-1、6-2 | flowchart |
-| ch12-第7章-AI读懂祖传代码 | 2 | 7-1、7-2 | flowchart/state |
-| ch13-第8章-目标架构 | 2 | 8-1、8-2 | flowchart |
-| ch14-第9章-契约先行 | 3 | 9-1、9-2、9-3 | flowchart |
-| ch15-第10章-边界变测试 | 2 | 10-1、10-2 | flowchart |
+| ch10-第5章-大规模考古画图 | 4 | 5-1、5-2、5-3、5-4 | flowchart |
+| ch11-第6章-跨团队依赖分析 | 3 | 6-1、6-2、6-3 | flowchart |
+| ch12-第7章-AI读懂祖传代码 | 3 | 7-1、7-2、7-3 | flowchart/state |
+| ch13-第8章-目标架构 | 4 | 8-1、8-2、8-3、8-4 | flowchart |
+| ch14-第9章-契约先行 | 5 | 9-1、9-2、9-3、9-4、9-5 | flowchart |
+| ch15-第10章-边界变测试 | 3 | 10-1、10-2、10-3 | flowchart |
 | ch16-第11章-留缝 | 3 | 11-1、11-2、11-3 | flowchart |
-| ch17-第12章-数据与日志分家 | 2 | 12-1、12-2 | flowchart |
-| ch18-第13章-单文件API到router+nginx | 2 | 13-1、13-2 | flowchart |
-| ch19-第14章-Python立包与迁移 | 2 | 14-1、14-2 | flowchart/state |
-| ch20-第15章-前端解耦多端设计系统 | 2 | 15-1、15-2 | flowchart |
-| ch21-第16章-聊天功能 | 2 | 16-1、16-2 | flowchart/sequence |
-| ch22-第17章-多端BFF | 2 | 17-1、17-2 | flowchart |
-| ch23-第18章-亿级流量 | 2 | 18-1、18-2 | flowchart/state |
-| ch24-第19章-五层门禁 | 3 | 19-1、19-2、19-3 | flowchart/state |
-| ch25-第20章-风控不可绕过 | 3 | 20-1、20-2、20-3 | flowchart/sequence |
-| ch26-第21章-对账灰度回滚监控 | 3 | 21-1、21-2、21-3 | flowchart/sequence |
-| ch27-第22章-安全合规公开仓库 | 2 | 22-1、22-2 | flowchart/sequence |
-| ch28-第23章-提示词工程与归档 | 3 | 23-1、23-2、23-3 | flowchart |
-| ch29-第24章-AI评审与幻觉处理 | 3 | 24-1、24-2、24-3 | flowchart/sequence |
-| ch30-第25章-文档ADR-RFC-设计令牌治理 | 2 | 25-1、25-2 | flowchart/state |
-| ch31-第26章-组织治理 | 2 | 26-1、26-2 | flowchart/state |
-| ch32-第27章-契约治理 | 3 | 27-1、27-2、27-3 | flowchart/sequence/state |
-| ch33-第28章-灰度发布 | 3 | 28-1、28-2、28-3 | flowchart/sequence/state |
+| ch17-第12章-数据与日志分家 | 4 | 12-1、12-2、12-3、12-4 | flowchart |
+| ch18-第13章-单文件API到router+nginx | 3 | 13-1、13-2、13-3 | flowchart |
+| ch19-第14章-Python立包与迁移 | 3 | 14-1、14-2、14-3 | flowchart/state |
+| ch20-第15章-前端解耦多端设计系统 | 4 | 15-1、15-2、15-3、15-4 | flowchart |
+| ch21-第16章-聊天功能 | 4 | 16-1、16-2、16-3、16-4 | flowchart/sequence |
+| ch22-第17章-多端BFF | 4 | 17-1、17-2、17-3、17-4 | flowchart |
+| ch23-第18章-亿级流量 | 4 | 18-1、18-2、18-3、18-4 | flowchart/sequence/state |
+| ch24-第19章-五层门禁 | 5 | 19-1、19-2、19-3、19-4、19-5 | flowchart/state |
+| ch25-第20章-风控不可绕过 | 5 | 20-1、20-2、20-3、20-4、20-5 | flowchart/sequence |
+| ch26-第21章-对账灰度回滚监控 | 5 | 21-1、21-2、21-3、21-4、21-5 | flowchart/sequence |
+| ch27-第22章-安全合规公开仓库 | 4 | 22-1、22-2、22-3、22-4 | flowchart/sequence |
+| ch28-第23章-提示词工程与归档 | 5 | 23-1、23-2、23-3、23-4、23-5 | flowchart |
+| ch29-第24章-AI评审与幻觉处理 | 4 | 24-1、24-2、24-3、24-4 | flowchart/sequence |
+| ch30-第25章-文档ADR-RFC-设计令牌治理 | 4 | 25-1、25-2、25-3、25-4 | flowchart/state |
+| ch31-第26章-组织治理 | 3 | 26-1、26-2、26-3 | flowchart/state |
+| ch32-第27章-契约治理 | 5 | 27-1、27-2、27-3、27-4、27-5 | flowchart/sequence/state |
+| ch33-第28章-灰度发布 | 5 | 28-1、28-2、28-3、28-4、28-5 | flowchart/sequence/state |
 | ch34-案例一-300人电商平台 | 3 | C1-1、C1-2、C1-3 | flowchart |
 | ch35-案例二-海星交易所 | 3 | C2-1、C2-2、C2-3 | flowchart/sequence |
 | ch36-案例三-暗流资本 | 3 | C3-1、C3-2、C3-3 | flowchart/sequence |
@@ -55,7 +55,7 @@
 | README（站点页） | 2 | HM-1、HM-2 | flowchart/mindmap |
 | guide（站点页） | 1 | G-1 | flowchart |
 
-42 个 `chNN-` 文件全部落在 2–3 张区间，无一例外。`manuscript/README.md` 是书稿总览页（1 张骨架图），九个 `part-*.md` 卷首页用位图艺术开场——两者都不是章，不参与「2–5 张」判定，由守卫按同一口径跳过。
+42 个 `chNN-` 文件全部落在 2–5 张区间：2 张 8 个、3 张 15 个、4 张 12 个、5 张 7 个（顶到 §9 上限的是第 9、19、20、21、23、27、28 这七章）。`manuscript/README.md` 是书稿总览页（1 张骨架图），九个 `part-*.md` 卷首页用位图艺术开场——两者都不是章，不参与「2–5 张」判定，由守卫按同一口径跳过。
 
 ## 附录为什么不豁免（2026-09-24 更正）
 
@@ -145,11 +145,17 @@ python3 scripts/check_legibility.py --mutate          # 第七条的变异自检
 python3 scripts/check_palette.py                      # 第八条：token 纪律 + 逐层 alpha 合成后的对比度 + 分色族可辨性 + 焦点环 + 悬停可辨性（真浏览器、真点 #btn-theme、真点鼠标）
 python3 scripts/check_palette.py --mutate             # 第八条的变异自检 P1–P21：每条判据各自要能报红（P10＝封面入口改名，首页正文无从抵达；P11＝位图锚点回执停在图版另一色，派生件对账在工作；P15/P16＝焦点环的环色不跟强调色 / 偏移成负值；P17＝声明的选择器被运行时注入的第二宿主赢；P18/P19＝index.html 的色抄件停在上版令牌 / 兜底表外冒出没人认领的抄件；P20/P21＝删掉书名的 :hover / hover 字色改成合法的边框灰，针「没有任何反馈」「字反而糊了」）
 python3 scripts/check_palette.py --screenshot DIR     # 1280/1440/390 × 浅/深 逐页截图（题图与配色改动后逐项复核用这条）
+python3 scripts/check_render_leaks.py                 # 第九条：写了 markdown 语法却没渲染出来的（粗体／行内码／链接的残留字面量，浏览器实测）
+python3 scripts/check_render_leaks.py --selftest      # 第九条的桩件自检
+python3 scripts/check_incidents.py                    # 第十条：跨文件事实一致性（编号↔日期、时间线窗口、事故点名处）
+python3 scripts/check_incidents.py --selftest         # 第十条的变异对照 M1–M7 ＋ 两条正例 ＋ 未变异控制跑
+python3 scripts/check_replay.py                       # 第十一条：书稿里的 python 块按 print 模板重放，紧邻 text 块的读数行必须落进模板
+python3 scripts/check_replay.py --selftest            # 第十一条的桩件自检；它同时打印自己的盲区（交人工的块数与行数），别把红零当全绿
 python3 scripts/plate_engine.py --check               # 题图引擎自检：板外色 / XML 解析 / 含 <text> 三种都判红
 python3 scripts/plate_engine.py --emit --no-preview    # 按当前 --c-plate* 令牌重发九张题图 SVG（改过图版令牌必跑；不发到 /tmp 之外等于没改）
 python3 scripts/recolor_plate_art.py --check          # 位图只量不改：冷调 / 暖调 / 墨线三条读数
 python3 scripts/recolor_plate_art.py                  # 位图重着色到当前三锚，零不达标才写锚点回执（改过图版令牌必跑，否则第八条 P11 报红）
-# 浏览器端：对 107 个围栏逐个 mermaid.parse（本表刷新时 107/107 通过）
+# 浏览器端不再"另跑一次 mermaid.parse"：每页「围栏数 = 已渲染图数」的等式已经由第七条守卫在每次全量跑里判（本表刷新时全站 148 = 148）
 # 口径边界（读到"全站"两个字之前先看下面几行）：首页 `#/` 的正文压在封面下，所以每条闸都要先声明自己是**量正文**还是**量封面**。
 # 第七、九、五、六、八条这五条走同一份揭幕链 `check_legibility.dismiss_cover`：真点封面上那条「全书架构」，等 `.cover.show` 消失之后再量正文
 # （点不动 / 点了不收起 ⇒ 报「正文无从揭幕，本页读数作废」而不是静默少测一页；这条拒判由变异 G / F / P10 / M6 各自把住）。
