@@ -44,26 +44,26 @@
 | ch32-第27章-契约治理 | 5 | 27-1、27-2、27-3、27-4、27-5 | flowchart/sequence/state |
 | ch33-第28章-灰度发布 | 5 | 28-1、28-2、28-3、28-4、28-5 | flowchart/sequence/state |
 | ch34-案例一-300人电商平台 | 3 | C1-1、C1-2、C1-3 | flowchart |
-| ch35-案例二-海星交易所 | 3 | C2-1、C2-2、C2-3 | flowchart/sequence |
+| ch35-案例二-海星交易所 | 5 | C2-1、C2-2、C2-3、C2-4、C2-5 | flowchart/sequence |
 | ch36-案例三-暗流资本 | 3 | C3-1、C3-2、C3-3 | flowchart/sequence |
 | ch37-案例四-守夜人科技 | 3 | C4-1、C4-2、C4-3 | flowchart/mindmap/sequence |
 | ch38-第33章-四案例交叉启示 | 4 | 33-1、33-2、33-3、33-4 | flowchart/mindmap |
 | ch39-附录A-提示词库骨架 | 2 | A-1、A-2 | flowchart/state |
-| ch40-附录I-契约治理规范模板 | 2 | I-1、I-2 | flowchart |
-| ch41-附录J-AI系统工程 | 2 | J-1、J-2 | flowchart |
-| ch42-附录K-一线最小实践包 | 2 | K-1、K-2 | flowchart/sequence |
+| ch40-附录I-契约治理规范模板 | 4 | I-1、I-2、I-3、I-4 | flowchart |
+| ch41-附录J-AI系统工程 | 5 | J-1、J-2、J-3、J-4、J-5 | flowchart |
+| ch42-附录K-一线最小实践包 | 4 | K-1、K-2、K-3、K-4 | flowchart/sequence |
 | README（站点页） | 2 | HM-1、HM-2 | flowchart/mindmap |
 | guide（站点页） | 1 | G-1 | flowchart |
 
 **上面这张表由 `python3 scripts/check_figures.py --print` 从手稿实测生成**（下面三行是它同一次运行打印的读数，不是手写）：
 
 ```text
-手稿 43 个文件 / 150 张图；站点页 3 张；合计 153 张。
-正文图引用 180 条 / 全书图注 153 条（唯一编号 153 个）/ 悬空与撞号 0 条。
+手稿 43 个文件 / 159 张图；站点页 3 张；合计 162 张。
+正文图引用 194 条 / 全书图注 162 条（唯一编号 162 个）/ 悬空与撞号 0 条。
 BOOK_SPEC §9 校验通过：每章 2–5 张、图号递增、图注与图一一对应、节点 ≤12、正文图引用全部可解析、图注编号全书唯一。
 ```
 
-42 个 `chNN-` 文件全部落在 2–5 张区间：2 张 7 个、3 张 13 个、4 张 14 个、5 张 8 个（顶到 §9 上限的是第 4、9、19、20、21、23、27、28 这八章）。**这一句是抄件**：它复述的就是上面那张表的第三列，那张表由 `check_figures.py --print` 生成——改完正文先重跑那条命令，两边一起动，别只改一张。`manuscript/README.md` 是书稿总览页（1 张骨架图），九个 `part-*.md` 卷首页用位图艺术开场——两者都不是章，不参与「2–5 张」判定，由守卫按同一口径跳过。
+42 个 `chNN-` 文件全部落在 2–5 张区间：2 张 4 个、3 张 12 个、4 张 16 个、5 张 10 个（顶到 §9 上限的是第 4、9、19、20、21、23、27、28 这八章，加上刚补过的案例二与附录 J，共十章）。**这一句是抄件**：它复述的就是上面那张表的第三列，那张表由 `check_figures.py --print` 生成——改完正文先重跑那条命令，两边一起动，别只改一张（2026-09-25 补附录那四份文件各加 1–3 张图，手稿从 150 涨到 159，就是先重跑命令再改这两处读数的）。`manuscript/README.md` 是书稿总览页（1 张骨架图），九个 `part-*.md` 卷首页用位图艺术开场——两者都不是章，不参与「2–5 张」判定，由守卫按同一口径跳过。
 
 ## 附录为什么不豁免（2026-09-24 更正）
 
@@ -159,7 +159,7 @@ python3 scripts/check_incidents.py                    # 第十条：跨文件事
 python3 scripts/check_incidents.py --selftest         # 第十条的变异对照 M1–M7 ＋ 两条正例 ＋ 未变异控制跑
 python3 scripts/check_replay.py                       # 第十一条：书稿里的 python 块按 print 模板重放，紧邻 text 块的读数行必须落进模板
 python3 scripts/check_replay.py --selftest            # 第十一条的桩件自检；它同时打印自己的盲区（交人工的块数与行数），别把红零当全绿
-python3 scripts/check_tier_ledger.py                  # 第十二条：档位对账闸——§4.5c 台账 49 行逐行等于对应卡上的具名档位声明（键整串相等／落点／档位集合／反向孤立声明）
+python3 scripts/check_tier_ledger.py                  # 第十二条：档位对账闸——§4.5c 台账逐行等于对应卡上的具名档位声明（台账有几行，以这条命令自己打印的「[覆盖] 台账 N 行」为准，不在这里抄）（键整串相等／落点／档位集合／反向孤立声明）
 python3 scripts/check_tier_ledger.py --selftest        # 第十二条的桩件自检：十支 fixture（正对照＋六类坏件＋两支派生支＋一支围栏归属）
 python3 scripts/check_tier_ledger.py --print           # 整列档位由卡派生：改档位的动作从这里开始，格子不许手填字母
 python3 scripts/plate_engine.py --check               # 题图引擎自检：板外色 / XML 解析 / 含 <text> 三种都判红
