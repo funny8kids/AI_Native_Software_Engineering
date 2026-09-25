@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Markdown 结构闸：围栏成对、正文不裸写围栏串、HTML 块后必须空行隔开、
 相对 HEAD 不丢小节标题、小节子树不得为空、同文件小节编号不得撞号、
-复跑命令块与守卫脚本全集相等、根/docs 双副本逐字节一致。
+复跑命令块与守卫脚本全集相等、正文不写裸文件路径、根/docs 双副本逐字节一致。
 
 Why：Docsify 用 marked 解析，两类破损都不报错、不产生死链，只有渲染后才看得见：
 · 正文里出现三个及以上反引号会被当作代码块起点，该行之后的整页被吞成裸文本
@@ -16,11 +16,14 @@ Why：Docsify 用 marked 解析，两类破损都不报错、不产生死链，�
 第五类不是渲染破损，是**登记破损**：`FIGURE_LIST.md` 的复跑命令块是全书守卫的名册，
 它抄自磁盘上的 `scripts/check_*.py`；新守卫没登记上就永远没有读者，删掉的守卫留在名册上
 就成了一条承诺了却没人执行的命令。判据按集合相等，条数不写进任何文案（见「守卫清单闸」）。
+第六类是**引用破损**：正文里写着 `./chNN-….md` 这样的裸文件路径——它不是链接（第七条
+`check_links.py` 在 DOM 里找 <a>，找不到它），也不是未落地的语法（第九条泄漏闸管的是星号
+反引号，路径本身被规规矩矩渲染出来了）。全站量到 12 处并已转成真链接（见「正文裸路径闸」）。
 所以在提交前用文本闸拦住。
 
 用法：python3 scripts/check_markdown.py            # 校验
       python3 scripts/check_markdown.py --count    # 只报覆盖量
-      python3 scripts/check_markdown.py --selftest # 标题闸 6 条 + 空节闸 4 条 + 撞号闸 5 条 + 守卫清单闸 4 条＋两支行首口径判别
+      python3 scripts/check_markdown.py --selftest # 标题闸＋空节闸＋撞号闸＋守卫清单闸＋裸路径闸；每闸条数由这条命令自己打印
 """
 import re
 import sys
@@ -305,6 +308,78 @@ def guard_index_selftest():
     return 0
 
 
+# ---------------------------------------------------------------- 正文裸路径闸
+# 为什么要加这一条（2026-09-26 实测）：正文里写着 `./ch23-第18章-高并发流量.md` 这样的
+# 裸文件路径，源码看着像一句引用，渲染出来是一串文件系统路径。它**两头都不落**：不是链接
+# （第七条 `check_links.py` 逐条发 HTTP，DOM 里没有 <a> 就看不见它），也不破结构（本闸
+# 原有判据对着它全绿、第九条泄漏闸也不管——星号反引号都落地了，落地的是一串路径）。
+# 全站量到 12 处，其中一处指向**不存在的文件名**（第 18 章的真名是
+# `ch23-第18章-亿级流量.md`），而那一句旁边还写着"以文件名实际链接为准"——一句要人来
+# 兜的口径，正是机检该接管的地方。
+# 口径：只认**围栏外、且不在 `](…)` 链接目标位**的 `./xxx.md`。排除集三条各由一支真实
+# 形状撑腰，缺一条就误伤全书：`](` 之后是合法链接目标（全书每一条真链接都走这一支）；`../` 开头是跨目录
+# 合法链接（`ch01` 指向 `../public-evidence.md` 两处）；围栏内是代码内容（第 9 章的 CI
+# YAML 注释里就有一条）。行内代码里的裸路径**照报**——第 19 章那三处就是反引号包着的。
+RAW_PATH = re.compile(r"(?<![.\w/(])\./[^\s）)、，。；`|]+\.md")
+
+
+def raw_path_hits(text):
+    """返回 [(行号, 命中串), …]。口径＝围栏外。纯函数、可注入（真产物与桩件走同一条判据）。"""
+    lines = text.splitlines()
+    kinds = heading_kinds(lines)
+    out = []
+    for i, (line, kind) in enumerate(zip(lines, kinds), 1):
+        if kind == "fence":
+            continue
+        m = RAW_PATH.search(line)
+        if m:
+            out.append((i, m.group()))
+    return out
+
+
+def raw_path_problems():
+    """返回 (问题列表, 扫描文件数, 命中数)。"""
+    problems, scanned, hits = [], 0, 0
+    for path in files():
+        scanned += 1
+        for no, s in raw_path_hits(path.read_text()):
+            hits += 1
+            problems.append(
+                f"{path.relative_to(ROOT)}:{no}: 正文裸写文件路径 {s!r} → 页面上是一串路径、"
+                f"不是链接（`check_links.py` 看不见它）→ 写成 [第 N 章]({s})"
+            )
+    if scanned == 0:
+        raise SystemExit("正文裸路径闸一个 md 文件都没枚举到——枚举口径塌了，这条闸不能算通过")
+    return problems, scanned, hits
+
+
+RAW_SELFTEST = [
+    ("链接目标位不报（全站真链接都走这一支）", "见[第 2 章](./ch07-第2章-人在回路.md)。\n", 0),
+    ("跨目录链接 `../` 不报", "见[公开证据档案](../public-evidence.md)。\n", 0),
+    ("正文裸路径报（第 27 章 174 行的形状）",
+     "（这条多端现实归第 17 章 ./ch22-第17章-多端BFF.md 管）。\n", 1),
+    ("行内代码包着的裸路径照报（第 19 章那三处的形状）",
+     "审批链的平台侧治理在第 2 章（`./ch07-第2章-人在回路.md`）。\n", 1),
+    ("围栏内是代码内容，不报", "```bash\ngrep -rn ./ch07-第2章-人在回路.md docs/\n```\n", 0),
+    ("链接文字里带同名文件名，不报", "| 数字 | 以 [`ch05-数字清单.md`](./ch05-数字清单.md) 为准 |\n", 0),
+]
+
+
+def raw_path_selftest():
+    bad = 0
+    for name, text, want in RAW_SELFTEST:
+        got = len(raw_path_hits(text))
+        if got != want:
+            bad += 1
+            print(f"  [✘] {name}：命中 {got} 条（应为 {want}）")
+        else:
+            print(f"  [✔] {name}：命中 {got} 条")
+    if bad:
+        raise SystemExit(f"正文裸路径闸的自检 {bad} 条不符——判据本身不可信")
+    print("  自检结论：真产物形状必报，三种合法写法（链接目标、`../`、围栏内）各有一支假阳对照。")
+    return 0
+
+
 # ---------------------------------------------------------------- 标题丢失闸
 # 为什么要加这一条（2026-09-24 实测）：本轮用 Edit 改稿时**连着三次**把下一块的
 # 头部一起吃掉了——ch27 少了一段围栏、ch26 少了 `## 21.5` 标题、ch05 少了 `## 3.3` 标题。
@@ -449,7 +524,9 @@ def main():
         rc3 = sid_selftest()
         print("[守卫清单闸] 复跑命令块 == scripts/check_*.py 全集")
         rc4 = guard_index_selftest()
-        return rc1 or rc2 or rc3 or rc4
+        print("[裸路径闸] 正文不写裸文件路径")
+        rc5 = raw_path_selftest()
+        return rc1 or rc2 or rc3 or rc4 or rc5
     problems, total_code, fence_lines = [], 0, 0
     for path in files():
         text = path.read_text()
@@ -466,11 +543,14 @@ def main():
     problems += sid_problems
     gi_problems, listed_n, disk_n = guard_index_problems_real()
     problems += gi_problems
+    raw_problems, raw_scanned, raw_hits = raw_path_problems()
+    problems += raw_problems
     if "--count" in sys.argv:
         print(f"{len(files())} 个 md 文件 / {fence_lines} 行围栏标记 / {total_code} 行代码块内容"
               f" / {baselined} 个文件有 HEAD 基线可对标题 / 空节闸扫 {scanned} 个文件"
               f" / 撞号闸扫 {sid_scanned} 个手稿文件"
-              f" / 守卫清单闸对 {disk_n} 个 scripts/check_*.py（名册列 {listed_n} 个）。")
+              f" / 守卫清单闸对 {disk_n} 个 scripts/check_*.py（名册列 {listed_n} 个）"
+              f" / 裸路径闸扫 {raw_scanned} 个文件（命中 {raw_hits} 条）。")
         return 0
     if problems:
         print("不通过：")
@@ -483,7 +563,8 @@ def main():
         f"HTML 块后无未隔空的 markdown 语法；{len(DUAL_COPY)} 对根/docs 副本逐字节一致；"
         f"{baselined} 个文件的相对 HEAD 小节标题零丢失；{scanned} 个文件无空小节；"
         f"{sid_scanned} 个手稿文件无小节编号撞号；"
-        f"复跑命令块与 {disk_n} 个守卫脚本集合相等。结构闸通过。"
+        f"复跑命令块与 {disk_n} 个守卫脚本集合相等；"
+        f"{raw_scanned} 个文件的正文无裸文件路径。结构闸通过。"
     )
     return 0
 
