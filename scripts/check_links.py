@@ -110,12 +110,36 @@ def selftest():
     return 0
 
 
+def probe(base):
+    """开跑前先问一次端口。返回 (ok, 原因)。
+
+    这一支存在的理由：服务没起时本闸原来会把每一条引用都记成死链（实测 108 条），
+    读数长得和真断链一模一样，只是原因写着「请求失败 URLError」。判不了不等于断，
+    所以未起时不逐条报，直接以退出码 2 停下——1 留给真死链，0 留给真通过。
+    """
+    url = base.rstrip("/") + "/"
+    try:
+        code = urllib.request.urlopen(url, timeout=5).getcode()
+    except urllib.error.HTTPError as e:
+        return False, f"端口上有服务但根路径回 HTTP {e.code}（不是本书的 docs 目录？）"
+    except Exception as e:  # noqa: BLE001
+        return False, f"本地 http 服务未起（{type(e).__name__}）"
+    if code != 200:
+        return False, f"根路径回 HTTP {code}"
+    return True, "200"
+
+
 def main():
     if "--selftest" in sys.argv:
         return selftest()
     base = "http://127.0.0.1:8080"
     if "--base" in sys.argv:
         base = sys.argv[sys.argv.index("--base") + 1]
+    live, why = probe(base)
+    if not live:
+        print(f"[服务] {why}：{base}")
+        print("[服务] 本闸一条引用都没判——判不了不等于断链，退出码 2 与真死链的 1 分开。")
+        return 2
     bad, checked = [], set()
     for f in sorted(DOCS.rglob("*")):
         if f.suffix not in (".md", ".html") or not f.is_file():
@@ -143,6 +167,7 @@ def main():
                 continue
             if code != 200:
                 bad.append((f.name, raw, f"HTTP {code}"))
+    print(f"[服务] 端口在（{base} 根路径 {why}），逐条判引用。")
     print(f"本地引用去重后 {len(checked)} 条 URL。")
     if bad:
         print("死链：")
