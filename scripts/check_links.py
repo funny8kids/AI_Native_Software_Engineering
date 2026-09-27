@@ -101,21 +101,48 @@ def selftest():
         fails.append("未闭合围栏：应当拒绝执行，却返回了读数")
     except SystemExit:
         pass
+    # 退出码三档：极性与假阳各一支。判不了与判出死链不可共用一个码，
+    # 而「有服务但根路径非 200」与「服务未起」都要落进「判不了」那一档（同一个码、不同文案）。
+    for name, live, dead, want in (("服务未起判不了", False, 0, RC_UNREADABLE),
+                                   ("有服务但根路径非 200 也判不了", False, 108, RC_UNREADABLE),
+                                   ("服务在且零死链", True, 0, RC_PASS),
+                                   ("服务在且有死链", True, 3, RC_DEAD)):
+        got = classify(live, dead)
+        if got != want:
+            fails.append(f"退出码 {name}：期望 {want}，实测 {got}")
+    # 上面四条对照用的是常量，常量本身被改成同一个值时它们会一起变绿，所以再钉一次档位互不相等
+    if len({classify(False, 0), classify(True, 0), classify(True, 3)}) != 3:
+        fails.append("退出码三档撞了：判不了与真死链共用一个码，本闸的红灯就不可解释")
     if fails:
         for f in fails:
             print(f"  ✗ {f}")
         print(f"死链守卫自检未通过：{len(fails)} 条")
         return 1
-    print("死链守卫自检通过：排除集两侧（示例不计 / 正文要计）+ 嵌套闭合 + 未闭合拒读。")
+    print("死链守卫自检通过：排除集两侧（示例不计 / 正文要计）+ 嵌套闭合 + 未闭合拒读 + 退出码三档（0 通过 / 1 真死链 / 2 判不了）。")
     return 0
+
+
+RC_PASS, RC_DEAD, RC_UNREADABLE = 0, 1, 2
+
+
+def classify(live, dead_count):
+    """探测档 + 死链条数 → 退出码。纯函数：网络与文件系统都不进来。
+
+    存在的理由是那一格「判不了」与「判出死链」曾共用退出码 1，而服务没起时本闸会把
+    每一条引用都记成死链（实测 108 条），读数长得和真断链一模一样。分档之后：
+    2 是「本闸一条都没判」，1 才是「判了，有死的」。
+    """
+    if not live:
+        return RC_UNREADABLE
+    return RC_DEAD if dead_count else RC_PASS
 
 
 def probe(base):
     """开跑前先问一次端口。返回 (ok, 原因)。
 
-    这一支存在的理由：服务没起时本闸原来会把每一条引用都记成死链（实测 108 条），
-    读数长得和真断链一模一样，只是原因写着「请求失败 URLError」。判不了不等于断，
-    所以未起时不逐条报，直接以退出码 2 停下——1 留给真死链，0 留给真通过。
+    原因分三档写：未起 / 有服务但根路径不是 200 / 根路径 2xx 以外。三者都要判「不可读」，
+    但文案不能混——「端口上有服务」那一档指的是另一本书或另一个目录，
+    提醒的是 --base 指错了，不是服务没起。
     """
     url = base.rstrip("/") + "/"
     try:
@@ -136,10 +163,10 @@ def main():
     if "--base" in sys.argv:
         base = sys.argv[sys.argv.index("--base") + 1]
     live, why = probe(base)
-    if not live:
+    if not live:  # 未起时不逐条判，也不逐条报——那 108 条「请求失败」不是 108 条死链
         print(f"[服务] {why}：{base}")
         print("[服务] 本闸一条引用都没判——判不了不等于断链，退出码 2 与真死链的 1 分开。")
-        return 2
+        return classify(live, 0)
     bad, checked = [], set()
     for f in sorted(DOCS.rglob("*")):
         if f.suffix not in (".md", ".html") or not f.is_file():
@@ -173,9 +200,9 @@ def main():
         print("死链：")
         for src, link, why in bad:
             print(f" - {src} -> {link} ({why})")
-        return 1
-    print("死链 = 0。")
-    return 0
+    else:
+        print("死链 = 0。")
+    return classify(live, len(bad))
 
 
 if __name__ == "__main__":
