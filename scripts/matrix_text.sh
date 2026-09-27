@@ -1,9 +1,9 @@
 #!/bin/bash
-# 文本/渲染类守卫（第一/二/三/九/十/十一/十二/十三条）在最终字节上的回归矩阵：逐条具名记 rc。
+# 文本/渲染类守卫（第一/二/三/九/十/十一/十二/十三/十四条）在最终字节上的回归矩阵：逐条具名记 rc。
 # 用法：MATRIX_DIR=/tmp/matrix_text_x scripts/matrix_text.sh
 #   日志目录由环境变量给；不给就用 /tmp/matrix_text。矩阵日志一旦开跑就不许复用旧目录
 #   （脚本会 rm -rf 重建，覆盖等于作废上一跑的取证）。
-# 自证两条：行数必须 =16，且**行名集合**必须等于期望集合——只数行数放过过有重复行、
+# 自证两条：行数必须 =18，且**行名集合**必须等于期望集合——只数行数放过过有重复行、
 # 缺条目的矩阵（口径来历见 DIAGNOSIS.md「回归矩阵的覆盖自证改为按行名集合」那条）。
 # 本件住在仓库里而不是 /tmp：/tmp 会被清，清了下一轮就只剩"记得怎么跑"而没有脚本。
 set -u
@@ -52,12 +52,16 @@ run 09b_leaks_st     python3 scripts/check_render_leaks.py --selftest
 run 13_citations     python3 scripts/check_citations.py
 run 13b_citations_st python3 scripts/check_citations.py --selftest
 
+run 14_response_dates     python3 scripts/check_response_dates.py
+run 14b_response_dates_st python3 scripts/check_response_dates.py --selftest
+
 EXPECT=$(printf '%s\n' 01_figures 01b_figures_st 02_links 03_markdown 03b_markdown_st \
   09_leaks 09b_leaks_st 10_incidents 10b_incidents_st 11_replay 11b_replay_st \
-  12_tier_ledger 12b_tier_st 12c_tier_print 13_citations 13b_citations_st | sort | tr '\n' ' ')
+  12_tier_ledger 12b_tier_st 12c_tier_print 13_citations 13b_citations_st \
+  14_response_dates 14b_response_dates_st | sort | tr '\n' ' ')
 GOT=$(awk '{print $1}' "$M" | sort | tr '\n' ' ')
 N=$(grep -c "" "$M")
-if [ "$N" -ne 16 ] || [ "$GOT" != "$EXPECT" ]; then
+if [ "$N" -ne 18 ] || [ "$GOT" != "$EXPECT" ]; then
   echo "!! 矩阵自证失败：$N 行；期望 [$EXPECT] 实得 [$GOT]"
   cat "$M"; exit 1
 fi
