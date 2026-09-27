@@ -1,7 +1,7 @@
 # 延伸阅读与公开参照
 
 > 可点开、可复述、可标日期。完整摘要见 [公开证据档案](public-evidence.md)。
-> 全部链接的可达性核验记录与核验方法：见 public-evidence.md「外链可达性台账」（核验日期 2026-09-24）。
+> 全部链接的可达性核验记录与核验方法：见 public-evidence.md「外链可达性台账」——那一节的表由 `python3 scripts/probe_external_links.py` 打印，核验日期与逐条状态码住在那一节里，本页不抄。
 
 ## 已核实（本轮抓取）
 
@@ -43,7 +43,7 @@
 | `reload` = 给 master 发 HUP，文档只描述信号语义、不承诺终端输出 | 官方 control 文档 | 200 · https://nginx.org/en/docs/control.html |
 | `proxy_set_header Host / X-Real-IP / X-Forwarded-For / X-Forwarded-Proto` 这组示例形状 | 官方 proxy 模块文档 | 200 · https://nginx.org/en/docs/http/ngx_http_proxy_module.html |
 
-**取不到读数的地址照实登记**：`github.com` 的三个 HTML 页面（两份 releases 页与一份 blob 页）本机读取超时，与首轮 import-linter 那次是同一现象（GitHub 的 HTML 页对本机慢，API 与站内文档正常）。所以卡里的版本日期一律按上表 API 读数；卡里那些**报错字符串不来自网页转述**，而是在指定版本上真实执行后的输出，复现路径写在卡内。
+**取不到读数的地址照实登记（这一条已在第十七轮过期，过期形状留在下面）**：2026-09-24 那一跑有三个 `github.com` 的 HTML 页面（两份 releases 页与一份 blob 页）本机读取超时，当时归因为"GitHub 的 HTML 页对本机慢，API 与站内文档正常"。第十七轮从全站正文重跑枚举之后，那三条地址已经不在台账里了——它们被换成了 `releases.atom`、`api.github.com` 与 `raw.githubusercontent.com` 三条不需要那层限流的路；而本轮枚举到的 `github.com` 首页与两份仓库页都是直连 200。所以那句归因只成立了一半：**「取不到」里有相当一部分是口径与时刻，不是资源的性质**——这也是这一页把取数路径写在每条读数旁边的原因。卡里的版本日期一律按上表 API 读数；卡里那些**报错字符串不来自网页转述**，而是在指定版本上真实执行后的输出，复现路径写在卡内。
 
 > 一条口径：**外部文档只背书"工具自己怎么表现"，不背书本书案例的任何数字。** 案例的数字唯一来源仍是 `manuscript/ch05-数字清单.md`。
 
@@ -81,7 +81,7 @@
 | 配置发现（cwd 向父目录 + 全局 `~/.foundry/foundry.toml`、`FOUNDRY_CONFIG` 覆盖）、profile 缺省名 `default` 且其余档继承它、优先级"内置缺省 < foundry.toml < `FOUNDRY_`/`DAPP_` 环境变量"、`forge config` 打印完全解析后的配置 | 官方 Configuration Overview 页 | 200 · https://book.getfoundry.sh/reference/config/overview |
 | **Foundry 稳定版更正为 `v1.8.3`（2026-09-15T12:49:47Z），上一条 `v1.8.2` 是 2026-09-14**；本表与卡里先前那条「v1.8.2 / 09-15」是把跨条目的 `<title>`–`<updated>` 配错了对象（这个 feed 里稳定版与 Nightly 交错排列），现改为**逐 `<entry>` 切分后再配** | releases atom（逐 entry 解析） | 200 · https://github.com/foundry-rs/foundry/releases.atom |
 | Trivy 最新稳定版 `v0.74.0`（2026-08-14T11:48:42Z）、上一条 `v0.73.0`（2026-08-03）——**改走 atom 后不再受 `api.github.com` 的 403 限制** | releases atom（逐 entry 解析） | 200 · https://github.com/aquasecurity/trivy/releases.atom |
-| Semgrep 发布序列 `1.178.0`（2026-09-23）/`1.177.0`/`1.176.0`/`1.175.0`；与 PyPI `1.178.0`、`requires_python >=3.10` 交叉一致 | releases atom + PyPI JSON | 200 · https://github.com/returntocorp/semgrep/releases.atom ｜ https://pypi.org/pypi/semgrep/json |
+| Semgrep 发布序列 `1.178.0`（2026-09-23）/`1.177.0`/`1.176.0`/`1.175.0`；与 PyPI `1.178.0`、`requires_python >=3.10` 交叉一致 | releases atom + PyPI JSON | 200 · https://github.com/semgrep/semgrep/releases.atom（旧组织路径 `returntocorp/` 本轮仍 200，但是**靠重定向**到的 `semgrep/semgrep`——与 oasdiff 那次同一形状，引用一律写现组织路径） ｜ https://pypi.org/pypi/semgrep/json |
 | Semgrep 退出码**文档侧**码表：`0`（未用 `--error`）、`1`（用了 `--error` 且有 finding）、`2` 失败、`3` 被扫语言语法非法（仅 `--strict`）、`4` 规则 schema 里有非法 pattern、`5` 配置不是合法 YAML、`7` 配置里至少一条规则非法、`8` 不认识指定语言 ——**与源码常量在"7"上语义不一致**（源码是 `MISSING_CONFIG_EXIT_CODE = 7`），卡里并列不裁决 | 官方 CLI reference 页 Exit codes 节 | 200 · https://docs.semgrep.dev/cli-reference |
 | Sentry SDK 版本线：PyPI 当前 `2.70.0`，`3.x` 只有 `3.0.0a1…a7` 预发布 ⇒ 2.x 是可抄的维护线 | PyPI 项目 JSON | 200 · https://pypi.org/pypi/sentry-sdk/json |
 | `sentry-cli info` 的**文档侧只有一句用途说明、无输出样例**（逐字 "To make sure everything works you can run `sentry-cli info`…"）；`.sentryclirc` 逐字（含"向上查找 + `~/.sentryclirc` 总是加载"、"standard INI syntax"）；`export SENTRY_AUTH_TOKEN=<token>` 与 `sentry-cli login --auth-token` 两种注入形状 | 官方 CLI configuration 页 | 200 · https://docs.sentry.io/cli/configuration/ |

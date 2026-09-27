@@ -158,7 +158,7 @@ mindmap
     <img src="assets/part8-fourcases.webp" alt="第八部分卷首艺术">
     <span class="part-idx">捌</span>
     <strong>四案例</strong>
-    <span>等权第一人称叙事 + 灰度发布锚点</span>
+    <span>等权第一人称叙事 + 灰度发布锚点 + 一个公开文献对照案</span>
   </a>
   <a class="home-part-card" href="manuscript/part-9-交叉收束.md">
     <img src="assets/part9-convergence.webp" alt="第九部分卷首艺术">
