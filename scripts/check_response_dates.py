@@ -228,13 +228,17 @@ def mutate(text, old, new):
 
 
 def selftest():
-    """正例 1、假阳 2、极性 6、空分母 1：九条对照都打在 parse→check→coverage 同一份实现上。"""
+    """正例／假阳对照／极性／空分母四类各若干条，都打在 parse→check→coverage 同一份实现上。
+
+    条数与分类明细不在这里写：上一版这段 docstring 抄的是「极性 6、九条对照」，而打印句抄的是
+    「极性 7、11 条」——两处手抄已经互相不等，同一份 cases 才是那第三个源头，所以本轮起由它给数。
+    """
     base = fixture()
-    cases = [("C1 正例：直配＋前奏两行各判各的，0 红", len(score(base)) == 0)]
-    cases.append(("C2 假阳对照：把一条落地行改成合法值「无行 · 归第 5 章」不许红",
+    cases = [("C1 正例：直配＋前奏两行各判各的，0 红", "正例", len(score(base)) == 0)]
+    cases.append(("C2 假阳对照：把一条落地行改成合法值「无行 · 归第 5 章」不许红", "假阳",
                   len(score(mutate(base, "2025-01-16 · 人工化 | 直配",
                                    "无行 · 归第 5 章 | 直配"))) == 0))
-    cases.append(("C3 假阳对照：把两条前奏行都摘干净（只留直配）不许红",
+    cases.append(("C3 假阳对照：把两条前奏行都摘干净（只留直配）不许红", "假阳",
                   len(score(mutate(mutate(base, "\n| 案例一 | ② KYC 漏字段 · 2025-08-20 | "
                                               "Y-0820（前奏）· 2025-02-14 | 合规不可删清单 | "
                                               "2025-03-20 · 合规不可删 | 前奏 |", ""),
@@ -251,14 +255,16 @@ def selftest():
     ]
     for name, mutated, kw in pol:
         f = score(mutated)
-        cases.append((f"{name}（命中「{kw}」）", any(kw in x for x in f)))
+        cases.append((f"{name}（命中「{kw}」）", "极性", any(kw in x for x in f)))
     f0 = []
     coverage({}, {}, [], {}, f0)
-    cases.append(("C11 空分母必红（一枚都没枚到 ⇒ 两条都报，不报通过）", len(f0) == 2))
-    ok = all(p for _, p in cases)
-    for name, passed in cases:
+    cases.append(("C11 空分母必红（一枚都没枚到 ⇒ 两条都报，不报通过）", "空分母", len(f0) == 2))
+    ok = all(p for _, _, p in cases)
+    for name, kind, passed in cases:
         print(f"  [{'OK' if passed else 'NO'}] {name}")
-    print(f"自检结论：{len(cases)} 条对照（正例 1、假阳 2、极性 7、空分母 1）——"
+    kinds = list(dict.fromkeys(k for _, k, _ in cases))
+    detail = "、".join(f"{k} {sum(1 for _, kk, _ in cases if kk == k)}" for k in kinds)
+    print(f"自检结论：{len(cases)} 条对照（{detail}）——"
           f"{'全部按预期' if ok else '有对照未按预期，判据不可信'}")
     return 0 if ok else 1
 

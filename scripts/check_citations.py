@@ -119,25 +119,31 @@ def run(docs_dir, verbose=False):
 
 
 def selftest():
-    """正例 1、反例 2、假阳对照 1、空分母 1：五条对照都打在 check/run 的同一份实现上。"""
+    """正例／反例／假阳对照／空分母四类各若干条，都打在 check/run 的同一份实现上。
+
+    条数不在这里写：每条对照带自己的分类标签，末行那一格由 cases 现算——上一版把明细
+    手抄在打印句里，实测追加一条对照后总数变 6 而明细仍是 5，且退出码 0。
+    """
     ent = {1, 2, 3, 4}
     cases = []
     d, o, ro = check(ent, {1}, [(2, 4)])
-    cases.append(("C1 正例：区间 E2–E4 覆盖，不算孤儿也不悬空", d == [] and o == [] and ro == [2, 3, 4]))
+    cases.append(("C1 正例：区间 E2–E4 覆盖，不算孤儿也不悬空", "正例", d == [] and o == [] and ro == [2, 3, 4]))
     d, o, ro = check(ent, {1, 9}, [])
-    cases.append(("C2 悬空必红（正文 E9 而档案无此节）", d == [9] and o == [2, 3, 4]))
+    cases.append(("C2 悬空必红（正文 E9 而档案无此节）", "反例", d == [9] and o == [2, 3, 4]))
     d, o, ro = check(ent, {1, 2, 3}, [])
-    cases.append(("C3 孤儿必红（E4 两头都没沾）", d == [] and o == [4] and ro == []))
+    cases.append(("C3 孤儿必红（E4 两头都没沾）", "反例", d == [] and o == [4] and ro == []))
     d, o, ro = check(ent, {1}, [])
-    cases.append(("C4 假阳对照：抹掉区间展开这一步，E2–E4 会被误判孤儿", o == [2, 3, 4]))
+    cases.append(("C4 假阳对照：抹掉区间展开这一步，E2–E4 会被误判孤儿", "假阳", o == [2, 3, 4]))
     import tempfile
     with tempfile.TemporaryDirectory() as td:
         rc_empty = run(pathlib.Path(td))
-    cases.append(("C5 空分母必红（正文一枚都没有，实测 rc=%d）" % rc_empty, rc_empty == 1))
-    ok = all(p for _, p in cases)
-    for name, passed in cases:
+    cases.append(("C5 空分母必红（正文一枚都没有，实测 rc=%d）" % rc_empty, "空分母", rc_empty == 1))
+    ok = all(p for _, _, p in cases)
+    for name, kind, passed in cases:
         print(f"  [{'✔' if passed else '✗'}] {name}")
-    print(f"自检结论：{len(cases)} 条对照（正例 1、反例 2、假阳 1、空分母 1）——"
+    kinds = list(dict.fromkeys(k for _, k, _ in cases))
+    detail = "、".join(f"{k} {sum(1 for _, kk, _ in cases if kk == k)}" for k in kinds)
+    print(f"自检结论：{len(cases)} 条对照（{detail}）——"
           f"{'全部按预期' if ok else '有对照未按预期，判据不可信'}")
     return 0 if ok else 1
 

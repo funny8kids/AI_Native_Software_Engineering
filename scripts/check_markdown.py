@@ -312,6 +312,89 @@ def guard_index_selftest():
     return 0
 
 
+# --------------------------------------------------------- 名册计数抄件闸
+# 为什么要加这一条（2026-09-27 实测）：复跑名册里每条 `--selftest` 命令后面都跟一句注释，
+# 注释里抄着该支守卫的桩件条数。本轮把九支的条数按「打印侧」量了一遍，抓到名册里
+# 「十支 fixture」那句抄件对应的真件早已是十五支——**条数错了，而九支守卫与两份名册全部报绿**。
+# 条数的真源头在守卫自己那行 `print(len(cases) …)` 里；名册那句是第二个宿主，且没有读者。
+# 判据落在形状上而不猜语义：自检行的注释里不留阿拉伯数字、不留「若干支」。
+ROSTER_SELFTEST_TAIL = re.compile(r"^python3 scripts/check_\w+\.py --selftest(.*)$")
+ROSTER_COUNT_SHAPES = [
+    (re.compile(r"[0-9]"), "阿拉伯数字"),
+    # 「那一支／每支／各支」是指示与泛指，不是条数抄件——本轮自己踩到的一次假阳，留在判据里而不是记忆里
+    (re.compile(r"(?<![每那这某各])[一二三四五六七八九十两]\s*支"), "若干支"),
+]
+
+
+def roster_count_problems(text, src):
+    """纯函数：名册里 `--selftest` 那一行的注释不许抄桩件条数。
+
+    只管自检行的注释段（命令本身在前段，`第 N 条` 这类守卫编号不在判据里）；
+    非自检的命令行、散文里提到 selftest 的句子都不进分母。
+    """
+    out = []
+    for i, line in enumerate(text.splitlines(), 1):
+        m = ROSTER_SELFTEST_TAIL.match(line)
+        if not m:
+            continue
+        tail = m.group(1)
+        hits = [name for rx, name in ROSTER_COUNT_SHAPES if rx.search(tail)]
+        if hits:
+            out.append(f"{src}:{i}: 自检行的注释里抄了条数（{'、'.join(hits)}）"
+                       f"→ 条数只住在该命令打印的那一行，这里改成「条数由该命令自己打印」")
+    return out
+
+
+ROSTER_SELFTEST = [
+    ("原样：只写「条数由该命令打印」→ 必须 0 条", "原样",
+     "python3 scripts/check_a.py --selftest # 第一条的自检：条数由该命令打印\n", 0),
+    ("抄了阿拉伯数字的分类明细（本轮抓到的真形状）→ 必须报 1 条", "极性",
+     "python3 scripts/check_a.py --selftest # 第一条的自检：正例 1 + 反例 2\n", 1),
+    ("抄了汉字条数「十支 fixture」（本闸立闸的那一条真件）→ 必须报 1 条", "极性",
+     "python3 scripts/check_a.py --selftest # 第一条的自检：十支 fixture\n", 1),
+    ("假阳对照：守卫编号「第十二条」「两类坏件」「每支各按」都不许报", "假阳",
+     "python3 scripts/check_a.py --selftest # 第十二条的自检：两类坏件＋每支各按自己的机制报红\n", 0),
+    ("假阳对照：非自检命令行、散文里的 selftest 都不进分母", "假阳",
+     "python3 scripts/check_a.py # 第二条：跑一百零八条\n某段散文提到 --selftest 有若干支\n", 0),
+    ("假阳对照：指示与泛指的「那一支」「每支」「各支」不许报（本轮自己踩到的形状）", "假阳",
+     "python3 scripts/check_a.py --selftest # 第十一条的自检：含整块交人工那一支，每支各按机制报红\n", 0),
+    ("极性对照：同句里把泛指换成条数「两支」就必须报", "极性",
+     "python3 scripts/check_a.py --selftest # 第十一条的自检：含整块交人工那一支，另有两支派生\n", 1),
+]
+
+
+def roster_selftest():
+    bad, cases = 0, []
+    for name, kind, text, want in ROSTER_SELFTEST:
+        got = len(roster_count_problems(text, "fixture"))
+        cases.append((name, kind, got == want))
+        flag = "✔" if got == want else "✘"
+        if got != want:
+            bad += 1
+        print(f"  [{flag}] {name}：报 {got} 条（应为 {want}）")
+    if bad:
+        raise SystemExit(f"名册计数闸的自检 {bad} 条不符——判据本身不可信")
+    kinds = list(dict.fromkeys(k for _, k, _ in cases))
+    detail = "、".join(f"{k} {sum(1 for _, kk, _ in cases if kk == k)}" for k in kinds)
+    print(f"  自检结论：{len(cases)} 条对照（{detail}），全部打在同一个纯函数上。")
+    return 0
+
+
+def roster_problems_real():
+    out, scanned = [], 0
+    for rel in sorted({"DIAGNOSIS.md", GUARD_LIST_REL}):
+        path = ROOT / rel
+        if not path.is_file():
+            raise SystemExit(f"名册计数闸取不到 {rel}——判据够不到名册，不算通过")
+        scanned += 1
+        n_before = len(out)
+        out += roster_count_problems(path.read_text(), rel)
+        print(f"  · {rel}：自检命令行进入分母 "
+              f"{sum(1 for l in path.read_text().splitlines() if ROSTER_SELFTEST_TAIL.match(l))} 条，"
+              f"本闸报红 {len(out) - n_before} 条")
+    return out, scanned
+
+
 # ---------------------------------------------------------------- 正文裸路径闸
 # 为什么要加这一条（2026-09-26 实测）：正文里写着 `./ch23-第18章-高并发流量.md` 这样的
 # 裸文件路径，源码看着像一句引用，渲染出来是一串文件系统路径。它**两头都不落**：不是链接
@@ -617,7 +700,9 @@ def main():
         rc5 = raw_path_selftest()
         print("[源文行号闸] 手稿正文不引用源码行号")
         rc6 = line_ref_selftest()
-        return rc1 or rc2 or rc3 or rc4 or rc5 or rc6
+        print("[名册计数闸] 自检行的注释不抄桩件条数")
+        rc7 = roster_selftest()
+        return rc1 or rc2 or rc3 or rc4 or rc5 or rc6 or rc7
     problems, total_code, fence_lines = [], 0, 0
     for path in files():
         text = path.read_text()
@@ -638,13 +723,16 @@ def main():
     problems += raw_problems
     lr_problems, lr_scanned, lr_hits = line_ref_problems()
     problems += lr_problems
+    roster_problems, roster_scanned = roster_problems_real()
+    problems += roster_problems
     if "--count" in sys.argv:
         print(f"{len(files())} 个 md 文件 / {fence_lines} 行围栏标记 / {total_code} 行代码块内容"
               f" / {baselined} 个文件有 HEAD 基线可对标题 / 空节闸扫 {scanned} 个文件"
               f" / 撞号闸扫 {sid_scanned} 个手稿文件"
               f" / 守卫清单闸对 {disk_n} 个 scripts/check_*.py（名册列 {listed_n} 个）"
               f" / 裸路径闸扫 {raw_scanned} 个文件（命中 {raw_hits} 条）"
-              f" / 源文行号闸扫 {lr_scanned} 个手稿文件（命中 {lr_hits} 条）。")
+              f" / 源文行号闸扫 {lr_scanned} 个手稿文件（命中 {lr_hits} 条）"
+              f" / 名册计数闸读 {roster_scanned} 份名册（报红 {len(roster_problems)} 条）。")
         return 0
     if problems:
         print("不通过：")
@@ -659,7 +747,8 @@ def main():
         f"{sid_scanned} 个手稿文件无小节编号撞号；"
         f"复跑命令块与 {disk_n} 个守卫脚本集合相等；"
         f"{raw_scanned} 个文件的正文无裸文件路径；"
-        f"{lr_scanned} 个手稿文件的正文无源码行号引用。结构闸通过。"
+        f"{lr_scanned} 个手稿文件的正文无源码行号引用；"
+        f"{roster_scanned} 份名册的自检行注释零抄件。结构闸通过。"
     )
     return 0
 
