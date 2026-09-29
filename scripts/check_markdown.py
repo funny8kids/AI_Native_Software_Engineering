@@ -27,7 +27,10 @@ Why：Docsify 用 marked 解析，两类破损都不报错、不产生死链，�
 
 用法：python3 scripts/check_markdown.py            # 校验
       python3 scripts/check_markdown.py --count    # 只报覆盖量
-      python3 scripts/check_markdown.py --selftest # 标题闸＋空节闸＋撞号闸＋守卫清单闸＋裸路径闸＋源文行号闸；每闸条数由这条命令自己打印
+      python3 scripts/check_markdown.py --selftest # 逐闸打印一段 ✔；闸名与每闸条数以这条命令的输出为准
+上面这段开头列的判据名是**写闸当时**的清单，它不是名册：加一支闸不会自动同步这里，
+所以判据全集只认 --selftest 打印的方括号标题与 --count 打印的分母行（本仓第 26 轮立
+「名册计数闸」的同一条理由，用在自己身上）。
 """
 import re
 import sys
@@ -552,6 +555,159 @@ def line_ref_selftest():
     return 0
 
 
+# ---------------------------------------------------------------- 取证路径闸
+# 为什么要加这一条（2026-09-28 实测，第 27 轮那次重启）：登记件里的取证路径全部写成
+# `/tmp/...`。/tmp 在这台机器上是 tmpfs，一次重启把那一轮制造的全部取证件清掉了——
+# 后果不是丢文件，是**登记行指向一个不存在的目录而每一支守卫全绿**：脚本要从书的围栏里
+# 重新抠出来重跑才对得上账（现场见 DIAGNOSIS.md 第 27 轮那三条补记）。
+# 立闸前量的命中面（同一条正则，`--count` 那行每轮重印）：`DIAGNOSIS.md` 去重 83 条、
+# `FIGURE_LIST.md` 1 条，磁盘在位的只剩 2 条——也就是**在册锚里约九成已经开不了**，
+# 而这件事没有任何机器读者。故本闸只判**新增**：跟 HEAD 那一版做差集，历史抄件不追认，
+# 只计进"盲区"这一格打印出来。为什么不追认历史：那需要一张排除清单，而排除清单是抄件，
+# 下一轮补一个旧锚就要加一条；HEAD 是派生件，差集是纯函数。
+# 判据落在**位置**而不是存在性上：`/tmp` 里在位也不算合格，本机今天在位不等于下一轮在位；
+# 仓库里的 `logs/` 在位才算，所以 logs/ 那一支还要再问一次磁盘。`logs/` 不进版本库
+# （.gitignore），它是本机取证不是书的一页——锚的搬运靠登记行同时写「路径＋取法」，
+# 路径丢了还能由取法重造，这一半写在本闸报红的那句话里而不是判据里。
+# 口径＝围栏外（示例命令里的 `/tmp` 是代码内容，不是登记）；行内代码包着的照报。
+# 另一条放宽是被实测逼出来的：**只写到目录名的串不算锚**（`logs/` 后面必须还有字符）——
+# 本轮登记行里有一句在讲「`logs/` 进 .gitignore」，那是落点本身不是取证文件，
+# 让它进分母会把「在册几条」这个读数泡在散文里。
+EV_CITE = re.compile(r"(?<![\w./~-])(?:/tmp|logs)/[^\s）)、，。；`|\"'<>]+")
+
+# 本闸读的登记件：两份名册只看根副本（docs/ 那份由双副本闸保证逐字节相同，
+# 各读一遍只会把同一个锚数两遍）。
+EVIDENCE_ROSTERS = ["DIAGNOSIS.md", "FIGURE_LIST.md"]
+
+
+def evidence_cites(text):
+    """返回 [(行号, 路径), …]：登记件正文（围栏外）引用的取证路径。纯函数、可注入。"""
+    lines = text.splitlines()
+    kinds = heading_kinds(lines)
+    out = []
+    for i, (line, kind) in enumerate(zip(lines, kinds), 1):
+        if kind == "fence":
+            continue
+        for m in EV_CITE.finditer(line):
+            out.append((i, m.group()))
+    return out
+
+
+def evidence_problems(cur_text, base_text, src, exists):
+    """纯函数：新登记的取证路径不许落在临时目录，落在仓库里的必须在磁盘上在位。
+
+    (本轮文本, HEAD 文本, 件名, 存在性判定) 四件全部注入——「两边各自派生、比较相等」
+    这种形状的守卫，如果把比较写在函数体里现取两边，两边相等就永远测不出改坏比较。
+    返回 (问题列表, 本轮去重条数, 新增条数, 盲区条数)。盲区＝HEAD 已登记但今天开不了的条数，
+    它不是判据（不报红），它存在的意义是让"本闸 0 报"不被读成"在册锚全在位"。
+    """
+    first_line = {}
+    for no, p in evidence_cites(cur_text):
+        first_line.setdefault(p, no)
+    base = {p for _, p in evidence_cites(base_text)}
+    problems, blind = [], 0
+    for p, no in sorted(first_line.items(), key=lambda kv: kv[1]):
+        if p in base:
+            continue
+        if p.startswith("/tmp"):
+            problems.append(
+                f"{src}:{no}: 新登记的取证路径 {p!r} 落在临时目录 → /tmp 是 tmpfs，"
+                f"一次重启就把这一轮的锚整个清掉（第 27 轮的现场）→ 改登进 logs/"
+                f"（两支矩阵脚本的默认落点），或把取证逐字进书")
+        elif not exists(p):
+            problems.append(
+                f"{src}:{no}: 新登记的取证路径 {p!r} 磁盘上不在位 → 登记行的锚指向一个"
+                f"没被制造出来的文件；先跑制造它的那条命令，再登记路径与取法")
+    for p in sorted(base):
+        if not exists(p):
+            blind += 1
+    return problems, len(first_line), len([p for p in first_line if p not in base]), blind
+
+
+def head_snapshot(rel):
+    """取 HEAD 那一版的登记件全文。取不到就中止：把「够不到基线」当成「基线里没有引用」
+    会让每一条历史抄件形同新登记，本闸从此只在碰巧时通过。"""
+    import subprocess
+    r = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=str(ROOT),
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        raise SystemExit(f"取证路径闸取不到 HEAD:{rel}——没有基线就没有『新增』可言，不算通过")
+    return r.stdout
+
+
+def path_on_disk(p):
+    q = Path(p) if p.startswith("/") else ROOT / p
+    return q.exists()
+
+
+def evidence_problems_real():
+    out, scanned, cited, new, blind = [], 0, 0, 0, 0
+    for rel in EVIDENCE_ROSTERS:
+        path = ROOT / rel
+        if not path.is_file():
+            raise SystemExit(f"取证路径闸取不到 {rel}——判据够不到登记件，不算通过")
+        scanned += 1
+        problems, c, n, b = evidence_problems(path.read_text(), head_snapshot(rel), rel, path_on_disk)
+        out += problems
+        cited += c
+        new += n
+        blind += b
+        print(f"  · {rel}：在册去重 {c} 条 / 本轮新增 {n} 条 / 本闸报红 {len(problems)} 条 "
+              f"/ 历史盲区（HEAD 登记、今天开不了）{b} 条")
+    if scanned < len(EVIDENCE_ROSTERS):
+        raise SystemExit("取证路径闸的登记件没读全——枚举口径塌了，这条闸不能算通过")
+    return out, scanned, cited, new, blind
+
+
+EV_SELFTEST = [
+    ("新增一条 /tmp 路径（第 27 轮的登记形状）→ 必须报 1 条",
+     "取证在 /tmp/w27_reprobe/probe5.txt，两跑逐字相同。\n", "", {"/tmp/w27_reprobe/probe5.txt"},
+     "极性", 1, 0),
+    ("新增 logs/ 路径但磁盘不在位 → 必须报 1 条",
+     "矩阵读数在 logs/text_w28/matrix.txt。\n", "", set(), "极性", 1, 0),
+    ("行内代码包着的 /tmp 路径照报（反引号不放宽位置判据）",
+     "红证在 `/tmp/w28_e1.txt` 里。\n", "", {"/tmp/w28_e1.txt"}, "极性", 1, 0),
+    ("同一条 /tmp 路径 HEAD 里已登记 → 不追认，0 报但计进盲区",
+     "取证在 /tmp/w27_reprobe/probe5.txt，两跑逐字相同。\n",
+     "上一轮写：/tmp/w27_reprobe/probe5.txt\n", set(), "假阳", 0, 1),
+    ("新增 logs/ 路径且磁盘在位（本轮起的合法形状）→ 必须不报",
+     "矩阵读数在 logs/text_w28/matrix.txt。\n", "旧锚 /tmp/a.txt\n",
+     {"logs/text_w28/matrix.txt"}, "假阳", 0, 1),
+    ("围栏内是示例命令，不登记 → 必须不报",
+     "```bash\ngrep -rn /tmp/matrix_text logs/\n```\n", "", set(), "假阳", 0, 0),
+    ("只写到目录名的串（散文在讲落点本身）不算锚 → 必须不报",
+     "`logs/` 进 `.gitignore`，默认落点只写到目录名。\n", "", set(), "假阳", 0, 0),
+    ("两边都没有取证路径 → 必须不报（空基线不许被读成恒真）",
+     "这一行没有路径，只有散文。\n", "", set(), "假阳", 0, 0),
+]
+
+
+def evidence_selftest():
+    bad = 0
+    for name, cur, base, on_disk, _, want, want_blind in EV_SELFTEST:
+        exists = lambda p: p in on_disk          # noqa: E731 —— 桩件里的存在性判定就是这张集合
+        problems, _, _, b = evidence_problems(cur, base, "桩件", exists)
+        ok = len(problems) == want and b == want_blind
+        if not ok:
+            bad += 1
+            print(f"  [✘] {name}：报 {len(problems)} 条（应为 {want}）/ "
+                  f"盲区 {b} 条（应为 {want_blind}）")
+        else:
+            print(f"  [✔] {name}：报 {len(problems)} 条，盲区 {b} 条")
+    if bad:
+        raise SystemExit(f"取证路径闸的自检 {bad} 条不符——判据本身不可信")
+    order, grp = [], {}
+    for _, _, _, _, kind, _, _ in EV_SELFTEST:
+        if kind not in grp:
+            order.append(kind)
+            grp[kind] = 0
+        grp[kind] += 1
+    print(f"  自检：{len(EV_SELFTEST)} 条对照（"
+          + "、".join(f"{k} {grp[k]}" for k in order) + "），全部打在同一个纯函数上。")
+    print("  分类明细由每条对照自带的标签现算——这句结论里不抄条数，也不抄『哪几支算假阳』。")
+    return 0
+
+
 # ---------------------------------------------------------------- 标题丢失闸
 # 为什么要加这一条（2026-09-24 实测）：本轮用 Edit 改稿时**连着三次**把下一块的
 # 头部一起吃掉了——ch27 少了一段围栏、ch26 少了 `## 21.5` 标题、ch05 少了 `## 3.3` 标题。
@@ -702,7 +858,9 @@ def main():
         rc6 = line_ref_selftest()
         print("[名册计数闸] 自检行的注释不抄桩件条数")
         rc7 = roster_selftest()
-        return rc1 or rc2 or rc3 or rc4 or rc5 or rc6 or rc7
+        print("[取证路径闸] 新登记的取证锚不许落在临时目录")
+        rc8 = evidence_selftest()
+        return rc1 or rc2 or rc3 or rc4 or rc5 or rc6 or rc7 or rc8
     problems, total_code, fence_lines = [], 0, 0
     for path in files():
         text = path.read_text()
@@ -725,6 +883,8 @@ def main():
     problems += lr_problems
     roster_problems, roster_scanned = roster_problems_real()
     problems += roster_problems
+    ev_problems, ev_scanned, ev_cited, ev_new, ev_blind = evidence_problems_real()
+    problems += ev_problems
     if "--count" in sys.argv:
         print(f"{len(files())} 个 md 文件 / {fence_lines} 行围栏标记 / {total_code} 行代码块内容"
               f" / {baselined} 个文件有 HEAD 基线可对标题 / 空节闸扫 {scanned} 个文件"
@@ -732,7 +892,9 @@ def main():
               f" / 守卫清单闸对 {disk_n} 个 scripts/check_*.py（名册列 {listed_n} 个）"
               f" / 裸路径闸扫 {raw_scanned} 个文件（命中 {raw_hits} 条）"
               f" / 源文行号闸扫 {lr_scanned} 个手稿文件（命中 {lr_hits} 条）"
-              f" / 名册计数闸读 {roster_scanned} 份名册（报红 {len(roster_problems)} 条）。")
+              f" / 名册计数闸读 {roster_scanned} 份名册（报红 {len(roster_problems)} 条）"
+              f" / 取证路径闸读 {ev_scanned} 份登记件（在册 {ev_cited} 条、新增 {ev_new} 条、"
+              f"报红 {len(ev_problems)} 条、历史盲区 {ev_blind} 条开不了）。")
         return 0
     if problems:
         print("不通过：")
@@ -748,7 +910,10 @@ def main():
         f"复跑命令块与 {disk_n} 个守卫脚本集合相等；"
         f"{raw_scanned} 个文件的正文无裸文件路径；"
         f"{lr_scanned} 个手稿文件的正文无源码行号引用；"
-        f"{roster_scanned} 份名册的自检行注释零抄件。结构闸通过。"
+        f"{roster_scanned} 份名册的自检行注释零抄件；"
+        f"{ev_scanned} 份登记件里本轮新增的 {ev_new} 条取证锚全部落在仓库内且在位"
+        f"（在册 {ev_cited} 条，另有 {ev_blind} 条历史锚今天开不了——本闸不追认，见取证路径闸注释）。"
+        f"结构闸通过。"
     )
     return 0
 

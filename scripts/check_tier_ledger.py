@@ -46,7 +46,15 @@ def tier_set(cell):
 
 
 def ledger_rows(text):
-    """解析 §4.5c 那张表：只收 5 列、且第 4 列形如落点的行。"""
+    """解析 §4.5c 那张表：只收 5 列、且第 4 列形如落点的行。
+
+    一行落点不成形**只跳过它自己**（第 28 轮队列②改的）。原来这里是 `break`：坏行之后
+    的每一行都不再进解析，于是台账尾部那一整段——包括它自己的档位对账——被一行坏数据
+    一起带走。`[分母]` 与「表体静默丢行」确实会把这一格报红，但报红的那句话只说
+    "少了几行"，被坏行藏住的那些行**本来还会各自报出别的红**（档位不符、落点找不到卡），
+    那些红在这一跑不会出现；下一轮有人修掉坏行，这些行第一次进账时集体报红，看起来像
+    "新改动引入的问题"。跳过之后坏行自己仍然进「表体静默丢行」那条判据，一行都不放过。
+    """
     lines = text.splitlines()
     for i, ln in enumerate(lines):
         if not ln.startswith("|") or norm(ln.split("|")[1]) != "工具":
@@ -60,7 +68,7 @@ def ledger_rows(text):
                 continue
             a = ANCHOR.match(norm(c[4]))
             if not a:
-                break
+                continue
             rows.append({"tool": c[1], "key": key_of(c[1]), "anchor": norm(c[4]),
                          "ch": a.group(1) or a.group(2), "sid": a.group(3),
                          "card": norm(a.group(4)) if a.group(4) else None,
@@ -286,8 +294,23 @@ def selftest():
     broken = good.replace("| B 件 | 支柱 |", "| B 件 |").replace(
         "| B 件 | 契约 | x | 第 9 章 9.5i | **B** |", "| B 件 | 契约 | x | **B** |")
     b_lost = sorted(set(table_body(broken)) - {r["line"] for r in ledger_rows(broken)})
-    cases.append(("分母自证（极性侧）：一行少一格会让它自己**和后面每一行**静默消失 → 必须数出来", b_lost,
+    cases.append(("分母自证（极性侧）：一行少一格 → 它自己从解析里消失但被表边界数出来", b_lost,
                   len(ledger_rows(broken)) == 1 and b_lost == [4]))
+    # 队列②（第 28 轮）：解析器那一支 break 换成了 continue，坏行不再带走它后面的每一行。
+    # 这两支 fixture 一前一后：前一支数「谁进了解析」，后一支数「那条红还在不在」。
+    b3 = good + "| C 件 | 契约 | x | 第 9 章 9.5j | **C** |\n"
+    broken3 = b3.replace("| B 件 | 契约 | x | 第 9 章 9.5i | **B** |", "| B 件 | 契约 | x | **B** |")
+    rows3 = ledger_rows(broken3)
+    lost3 = sorted(set(table_body(broken3)) - {r["line"] for r in rows3})
+    cases.append(("跳过而不是中止：坏行自己进盲区计数（第 4 行），它后面那一行必须仍然进解析",
+                  (lost3, [r["key"] for r in rows3]),
+                  lost3 == [4] and [r["key"] for r in rows3] == ["A 件", "C 件"]))
+    idx9 = {"chX.md": [
+        {"key": "A 件", "tier": "A 档 · 本机实跑", "line": 5, "head": "9.5h", "stack": ["9.5h"], "file": "chX.md"},
+        {"key": "C 件", "tier": "A 档 · 本机实跑", "line": 9, "head": "9.5j", "stack": ["9.5j"], "file": "chX.md"}]}
+    f3, _ = run(rows3, idx9)
+    cases.append(("正闸：坏行之后那一行的档位不符照样报红（原来那一支 break 会把这条红一起藏掉）",
+                  f3, len(f3) == 1 and any("档位不符" in x and "C 件" in x for x in f3)))
     # 分桶那一支的两侧：桶由表边界独立枚举，所以「相加 == 解析行数」不是恒真判据
     bk, bd = pillar_buckets(good)
     cases.append(("分桶自证（假阳侧）：两行同支柱 → 桶一格、明细相加等于解析行数", (bk, bd),

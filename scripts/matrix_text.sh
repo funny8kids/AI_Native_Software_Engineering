@@ -1,8 +1,12 @@
 #!/bin/bash
 # 文本/渲染类守卫（第一/二/三/九/十/十一/十二/十三/十四条）在最终字节上的回归矩阵：逐条具名记 rc。
-# 用法：MATRIX_DIR=/tmp/matrix_text_x scripts/matrix_text.sh
-#   日志目录由环境变量给；不给就用 /tmp/matrix_text。矩阵日志一旦开跑就不许复用旧目录
-#   （脚本会 rm -rf 重建，覆盖等于作废上一跑的取证）。
+# 用法：scripts/matrix_text.sh                          # 日志落在 logs/text_<UTC 时间戳>/
+#       MATRIX_DIR=logs/text_w28 scripts/matrix_text.sh # 按轮命名；撞上一轮的 matrix.txt 会拒绝执行
+#   落点从 2026-09-29 起在仓库里而不在 /tmp：/tmp 是 tmpfs，一次重启把上一轮所有取证件清掉了
+#   （现场见 DIAGNOSIS.md 第 27 轮「一次重启把本轮的取证件清掉了」那条），登记行里写的日志路径
+#   从此指向一个不存在的目录，而矩阵本身全绿——日志活着不代表锚活着。
+#   覆盖判据也跟着搬进机制：目标目录里已经有 matrix.txt 就直接拒绝，不再 rm -rf 重建。
+#   矩阵日志仍不进版本库（.gitignore 的 logs/），它是本机取证不是书的组成部分。
 # 自证两条：行数必须 =19，且**行名集合**必须等于期望集合——只数行数放过过有重复行、
 # 缺条目的矩阵（口径来历见 DIAGNOSIS.md「回归矩阵的覆盖自证改为按行名集合」那条）。
 # 名字集合这一支在 2026-09-27 之前只兜住「多一行/少一行」，兜不住「某条守卫有 --selftest 却从未被派到行」——
@@ -11,12 +15,15 @@
 set -u
 R=$(cd "$(dirname "$0")/.." && pwd)
 SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
-L=${MATRIX_DIR:-/tmp/matrix_text}
+L=${MATRIX_DIR:-$R/logs/text_$(date -u +%Y%m%dT%H%M%SZ)}
+case "$L" in /*) ;; *) L="$R/$L";; esac
 M="$L/matrix.txt"
 cd "$R" || exit 1
 
 exec 9>/tmp/ainse_matrix_text.lock
 flock -n 9 || { echo "!! 已有文本矩阵在跑（锁 /tmp/ainse_matrix_text.lock）——并发跑会把读数写混"; exit 1; }
+# 锁留在 /tmp 是有意的：它是互斥量不是取证件，重启后本该没有人持着它。
+# 搬进仓库的那一半是证据（matrix.txt 与各条 .log），不是这把锁。
 
 # 派生对账（第 26 轮队列④）：每支自带 --selftest 分派的守卫都必须在本件里有一行 run。
 # 为什么要这一格：EXPECT 的名字集合是手抄的，它兜得住「少跑一行」，兜不住「一条守卫的自检
@@ -34,7 +41,13 @@ if [ -n "$MISS" ]; then
   exit 1
 fi
 
-rm -rf "$L"; mkdir -p "$L"
+if [ -e "$M" ]; then
+  echo "!! $M 已存在——跑第二趟会把上一轮的取证覆盖掉（覆盖等于作废那一跑的登记行）。"
+  echo "   默认落点带 UTC 时间戳，本来撞不上；撞上说明你显式给了一个用过的 MATRIX_DIR。"
+  echo "   要么换目录名，要么先读旧的那份再决定是不是真的要重跑。"
+  exit 1
+fi
+mkdir -p "$L"
 : > "$M"
 
 run() {  # run <名字> <命令...>
@@ -53,16 +66,14 @@ run 12_tier_ledger   python3 scripts/check_tier_ledger.py
 run 12b_tier_st      python3 scripts/check_tier_ledger.py --selftest
 run 12c_tier_print   python3 scripts/check_tier_ledger.py --print
 
-# 第二条要起服务。按 PID 收，不用 pkill -f——那条模式的字面串就在本脚本自己的命令行里。
-python3 -m http.server 8080 --directory docs > "$L/httpd.log" 2>&1 &
-HTTPD=$!
-sleep 2
+# 第二条不自带外部服务了（2026-09-29）：本矩阵原来在这里 `http.server 8080 &`，
+# 而端口被外来服务占住时那一条**静默绑定失败**，检查却继续对着别人的目录跑——
+# 108 条正常引用当场报成死链、退出码 1。现在 `check_links.py` 与浏览器那几条守卫一样
+# 自起服务于空闲端口，所以这里不再起服务，也不再需要 `sleep` 等它就绪。
 run 02_links         python3 scripts/check_links.py
 run 02b_links_st     python3 scripts/check_links.py --selftest
-kill "$HTTPD" 2>/dev/null
-wait "$HTTPD" 2>/dev/null
 # 02b 的对照件全是内存里的文本，不碰网络也不读 docs/，所以它绿不绿与 02 那格互不背书：
-# 02 报 2 时（服务未起、本闸一条引用都没判）02b 仍应是 0。
+# 02 报 2 时（判不了：端口上不是本书、或连接层就没通，本闸一条引用都没判）02b 仍应是 0。
 # 矩阵行按原始 rc 逐条记录，2 与 1 在 matrix.txt 里本来就分得开——2 是判不了，1 才是真死链。
 
 run 10_incidents     python3 scripts/check_incidents.py

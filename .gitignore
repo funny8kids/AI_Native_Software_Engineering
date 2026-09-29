@@ -43,3 +43,8 @@ jspm_packages/
 # Python bytecode from guard scripts
 __pycache__/
 *.pyc
+
+# 回归矩阵的取证日志（scripts/matrix_*.sh 的默认落点）。
+# 搬进仓库是为了扛住重启——/tmp 是 tmpfs，上一轮的取证被一次重启整个清掉过；
+# 不进版本库是因为它是本机取证，不是书的组成部分，且每轮都换目录名会无限堆积。
+logs/

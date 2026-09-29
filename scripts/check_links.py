@@ -2,22 +2,28 @@
 """死链守卫：把 docs 里每一条本地引用换成真实 HTTP 请求。
 
 用法：
-    python3 -m http.server 8080 --directory docs &     # 或任意端口
-    python3 scripts/check_links.py [--base http://127.0.0.1:8080]
+    python3 scripts/check_links.py                    # 默认自起服务于空闲端口，不依赖外部服务
+    python3 scripts/check_links.py --base http://127.0.0.1:8080   # 指到已有的服务（要过身份哨兵）
 
 解析口径：
 - Markdown 链接/图片、HTML 的 href/src、Docsify 的 /manuscript/x.md 根相对路径。
 - 锚点（#…）只校验宿主文件存在；外链（http/https/mailto）交 public-evidence.md 的可达性台账。
 - 尖括号包裹的链接与 `<>` 路由（九部分卷首）同样解析。
 """
+import functools
+import http.server
 import re
+import socketserver
 import sys
+import threading
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cdp import free_port  # noqa: E402  与第四/第七条守卫同一把端口尺
 
 MD_LINK = re.compile(r"!\[[^\]]*\]\((<?[^)\s]+>?)\)|\[([^\]]*)\]\((<?[^)\s]+>?)\)")
 HTML_ATTR = re.compile(r"(?:href|src)\s*=\s*[\"']([^\"']+)[\"']", re.I)
@@ -78,47 +84,78 @@ def resolve(path, base_dir):
 
 
 def selftest():
-    """排除集的两种死法都要红：把示例当链接（过窄），把正文链接也放掉（过宽）。"""
-    fails = []
+    """排除集的两种死法都要红：把示例当链接（过窄），把正文链接也放掉（过宽）。
+
+    每支对照自带「家族／类别」两个标签，末行的分母、家族明细与极性—假阳配比全部现算——
+    加一支对照不需要改任何文案，改文案也不能让读数好看一点。
+    """
+    fams, kinds, fails = {}, {}, []
+
+    def check(fam, kind, name, ok, detail=""):
+        fams.setdefault(fam, [0, 0])[0] += 1
+        kinds[kind] = kinds.get(kind, 0) + 1
+        if not ok:
+            fams[fam][1] += 1
+            fails.append(f"[{kind}] {fam}｜{name}" + (f"：{detail}" if detail else ""))
+
     in_fence = "正文。\n\n```python\nlink = '[a](./nope.md)'\nx = '<link href=\"nope.css\">'\n```\n"
     in_icode = "示例草稿正文：`模板在 [附录 D](./nope.md)`，其余是话。\n"
     prose = "真引用：[第 9 章](./ch14-第9章-契约先行.md)。\n"
     wide = "正文里还有 [坏链](./does-not-exist.md)。\n"
-    for name, txt, want in (("代码块内不计", in_fence, []),
-                            ("行内代码内不计", in_icode, []),
-                            ("正文链接要计", prose, ["./ch14-第9章-契约先行.md"]),
-                            ("正文坏链要计", wide, ["./does-not-exist.md"])):
+    for name, kind, txt, want in (("代码块内不计", "假阳", in_fence, []),
+                                  ("行内代码内不计", "假阳", in_icode, []),
+                                  ("正文链接要计", "极性", prose, ["./ch14-第9章-契约先行.md"]),
+                                  ("正文坏链要计", "极性", wide, ["./does-not-exist.md"])):
         got = targets(txt)
-        if got != want:
-            fails.append(f"{name}：期望 {want}，实测 {got}")
+        check("排除集", kind, name, got == want, f"期望 {want}，实测 {got}")
     # 嵌套围栏：四反引号包住三反引号示例，只有外层闭合才算出块
     nested = "````markdown\n```python\nf = '[b](./nope.md)'\n```\n````\n之后 [c](./ok.md)\n"
-    if targets(nested) != ["./ok.md"]:
-        fails.append(f"嵌套围栏：期望 ['./ok.md']，实测 {targets(nested)}")
+    check("围栏闭合", "极性", "嵌套围栏只算外层闭合", targets(nested) == ["./ok.md"],
+          f"期望 ['./ok.md']，实测 {targets(nested)}")
     # 未闭合围栏必须拒绝读数，不能悄悄把后半篇当代码块豁免掉
     try:
         visible_markdown("```python\nf = 1\n[a](./b.md)\n")
-        fails.append("未闭合围栏：应当拒绝执行，却返回了读数")
+        check("围栏闭合", "极性", "未闭合围栏拒绝读数", False, "应当 SystemExit，却返回了读数")
     except SystemExit:
-        pass
+        check("围栏闭合", "极性", "未闭合围栏拒绝读数", True)
     # 退出码三档：极性与假阳各一支。判不了与判出死链不可共用一个码，
     # 而「有服务但根路径非 200」与「服务未起」都要落进「判不了」那一档（同一个码、不同文案）。
     for name, live, dead, want in (("服务未起判不了", False, 0, RC_UNREADABLE),
-                                   ("有服务但根路径非 200 也判不了", False, 108, RC_UNREADABLE),
+                                   ("有服务但非本书也判不了", False, 108, RC_UNREADABLE),
                                    ("服务在且零死链", True, 0, RC_PASS),
                                    ("服务在且有死链", True, 3, RC_DEAD)):
-        got = classify(live, dead)
-        if got != want:
-            fails.append(f"退出码 {name}：期望 {want}，实测 {got}")
-    # 上面四条对照用的是常量，常量本身被改成同一个值时它们会一起变绿，所以再钉一次档位互不相等
-    if len({classify(False, 0), classify(True, 0), classify(True, 3)}) != 3:
-        fails.append("退出码三档撞了：判不了与真死链共用一个码，本闸的红灯就不可解释")
+        check("退出码分档", "假阳" if want == RC_PASS else "极性", name,
+              classify(live, dead) == want, f"期望 {want}，实测 {classify(live, dead)}")
+    # 上面几条对照用的是常量，常量本身被改成同一个值时它们会一起变绿，所以再钉一次档位互不相等
+    check("退出码分档", "极性", "三档互不相等",
+          len({classify(False, 0), classify(True, 0), classify(True, 3)}) == 3,
+          "判不了与真死链共用一个码，本闸的红灯就不可解释")
+    # 预检：把「端口上不是本书」判成可信，就会把一整本正常引用报成死链（2026-09-29 真发生过）。
+    # 唯一那支假阳对照＝真·本书的三件全对；其余每一支都必须拒绝，且拒绝文案各指一件事。
+    for name, (rc, sc, same), want_ok, want_kw in (
+            ("根 200 且哨兵字节一致", (200, 200, True), True, None),
+            ("连接层就没通", (None, None, True), False, "未起"),
+            ("根路径非 200", (404, None, True), False, "根路径"),
+            ("端口上给不出哨兵", (200, None, True), False, "给不出"),
+            ("哨兵回非 200", (200, 403, True), False, "回 HTTP 403"),
+            ("哨兵同名而字节不等", (200, 200, False), False, "另一本书"),
+    ):
+        ok, why = judge_liveness(rc, sc, same)
+        check("预检", "假阳" if want_ok else "极性", name, ok == want_ok and
+              (want_kw is None or want_kw in why),
+              f"期望 {'可信' if want_ok else '不可信'}且含「{want_kw}」，实测 {ok}／{why}")
     if fails:
         for f in fails:
             print(f"  ✗ {f}")
-        print(f"死链守卫自检未通过：{len(fails)} 条")
+        print(f"死链守卫自检未通过：{len(fails)} 条未达预期"
+              f"（分母 {sum(v[0] for v in fams.values())} 支）")
         return 1
-    print("死链守卫自检通过：排除集两侧（示例不计 / 正文要计）+ 嵌套闭合 + 未闭合拒读 + 退出码三档（0 通过 / 1 真死链 / 2 判不了）。")
+    total = sum(v[0] for v in fams.values())
+    print(f"死链守卫自检通过：{total} 支对照，未达预期 0 支——"
+          + "／".join(f"{k} {v[0]} 支（红 {v[1]}）" for k, v in fams.items()))
+    print("  类别配比现算：" + "／".join(f"{k} {n} 支" for k, n in kinds.items()))
+    print(f"  退出码三档由 classify 现算：判不了 {classify(False, 0)}／"
+          f"判过且干净 {classify(True, 0)}／判出死链 {classify(True, 3)}")
     return 0
 
 
@@ -137,36 +174,119 @@ def classify(live, dead_count):
     return RC_DEAD if dead_count else RC_PASS
 
 
-def probe(base):
-    """开跑前先问一次端口。返回 (ok, 原因)。
+SENTINEL = "_sidebar.md"  # 身份哨兵：Docsify 的导航件，删了书就坏了，所以拿它问"这是不是本书"
 
-    原因分三档写：未起 / 有服务但根路径不是 200 / 根路径 2xx 以外。三者都要判「不可读」，
-    但文案不能混——「端口上有服务」那一档指的是另一本书或另一个目录，
-    提醒的是 --base 指错了，不是服务没起。
+
+def judge_liveness(root_code, sentinel_code, same_bytes):
+    """（根路径码, 哨兵码, 哨兵字节是否相等）→ (可信, 原因)。纯函数：网络与磁盘都不进来。
+
+    三档不合并的理由是今天这一跑：8080 上挂着另一本书的服务，`http.server 8080` 静默绑定失败，
+    旧探针只问过根路径是不是 200，于是 108 条正常引用全报成死链、退出码 1——与真断链同一个码。
+    「没服务」「服务不是本书」「是本书但字节漂了」是三件不同的修，共用一个 200 时红灯就失去指认能力。
     """
-    url = base.rstrip("/") + "/"
+    if root_code is None:
+        return False, "本地 http 服务未起（连接层就没通）"
+    if root_code != 200:
+        return False, f"根路径回 HTTP {root_code}（不是本书的 docs 目录？）"
+    if sentinel_code is None:
+        return False, f"端口上有服务，但它给不出本书的 {SENTINEL}——那是另一个目录"
+    if sentinel_code != 200:
+        return False, f"端口上有服务，但对本书的 {SENTINEL} 回 HTTP {sentinel_code}——那是另一个目录"
+    if not same_bytes:
+        return False, f"{SENTINEL} 取到了却与仓库里的字节不等——那是另一本书的同名件"
+    return True, f"根路径 200、{SENTINEL} 字节与仓库一致"
+
+
+def sentinel_bytes():
+    """对照件从仓库现取，不抄常量也不抄内容：改一次侧栏文字不该把预检洗成"永远不等"。"""
+    f = DOCS / SENTINEL
+    if not f.is_file():
+        raise SystemExit(f"哨兵 {SENTINEL} 在 docs/ 里查无此人——预检没有对照件，本闸拒绝读数")
+    return f.read_bytes()
+
+
+def http_code(url):
+    """取一次状态码；连不上（被拒、超时）返回 None，HTTP 错误返回那个码。"""
     try:
-        code = urllib.request.urlopen(url, timeout=5).getcode()
+        with urllib.request.urlopen(url, timeout=5) as r:
+            r.read()  # 读干净再走：半读断开会让自起的服务往 stderr 倒 traceback
+            return r.getcode()
     except urllib.error.HTTPError as e:
-        return False, f"端口上有服务但根路径回 HTTP {e.code}（不是本书的 docs 目录？）"
-    except Exception as e:  # noqa: BLE001
-        return False, f"本地 http 服务未起（{type(e).__name__}）"
+        return e.code
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def fetch(url):
+    return urllib.request.urlopen(url, timeout=5).read()
+
+
+def self_serve():
+    """默认自起服务：把运行时面从「别人在 8080 上起了什么」收回到本闸自己手里。
+
+    浏览器那几条守卫早就这么做（`check_legibility.serve()` 用同一个 `cdp.free_port()`），
+    第二条是最后一个还依赖外部固定端口的，而端口正是这台机器上会被别的项目占走的东西。
+    `--base` 仍然留给"已有服务"那一档，只是那一档现在要过身份哨兵。
+    """
+    class Quiet(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+    httpd = socketserver.ThreadingTCPServer(
+        ("127.0.0.1", free_port()), functools.partial(Quiet, directory=str(DOCS)))
+    httpd.daemon_threads = True
+    port = httpd.server_address[1]
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return f"http://127.0.0.1:{port}", httpd.shutdown
+
+
+def probe(base):
+    """开跑前先问两次：端口在不在，以及那个端口**是不是本书**。返回 (可信, 原因)。
+
+    原因分四档写：未起 / 根路径不是 200 / 端口上不是本书 / 是本书但对照件漂了。
+    四档都判「不可读」，但文案不能混——前三档修的是环境，第四档修的是这一跑的可信度。
+    """
+    root = base.rstrip("/") + "/"
+    code = http_code(root)
+    surl = base.rstrip("/") + "/" + urllib.parse.quote(SENTINEL)
     if code != 200:
-        return False, f"根路径回 HTTP {code}"
-    return True, "200"
+        return judge_liveness(code, None, True)
+    scode = http_code(surl)
+    same = True
+    if scode == 200:
+        try:
+            same = fetch(surl) == sentinel_bytes()
+        except Exception:  # noqa: BLE001
+            scode = None
+    return judge_liveness(code, scode, same)
 
 
 def main():
     if "--selftest" in sys.argv:
         return selftest()
-    base = "http://127.0.0.1:8080"
-    if "--base" in sys.argv:
-        base = sys.argv[sys.argv.index("--base") + 1]
+    external = "--base" in sys.argv
+    if external:
+        base, stop, how = sys.argv[sys.argv.index("--base") + 1], None, "外部 --base 指定的服务"
+    else:
+        base, shutdown = self_serve()
+        def stop():
+            shutdown()
+        how = "本闸自起的空闲端口"
+    try:
+        return check_all(base, how)
+    finally:
+        if stop:
+            stop()
+
+
+def check_all(base, how):
     live, why = probe(base)
-    if not live:  # 未起时不逐条判，也不逐条报——那 108 条「请求失败」不是 108 条死链
+    if not live:  # 判不了时不逐条判，也不逐条报——那 108 条「请求失败」不是 108 条死链
         print(f"[服务] {why}：{base}")
-        print("[服务] 本闸一条引用都没判——判不了不等于断链，退出码 2 与真死链的 1 分开。")
+        print("[服务] 本闸一条引用都没判——判了但全挂 ≠ 判不了；"
+              "退出码 2 与真死链的 1 分开，去修的那一件是环境不是稿件。")
         return classify(live, 0)
+    print(f"[服务] {how}：{base}（{why}）")
     bad, checked = [], set()
     for f in sorted(DOCS.rglob("*")):
         if f.suffix not in (".md", ".html") or not f.is_file():
@@ -186,7 +306,9 @@ def main():
                 continue
             checked.add(url)
             try:
-                code = urllib.request.urlopen(url, timeout=10).getcode()
+                with urllib.request.urlopen(url, timeout=10) as r:
+                    r.read()
+                    code = r.getcode()
             except urllib.error.HTTPError as e:
                 code = e.code
             except Exception as e:  # noqa: BLE001
@@ -194,7 +316,6 @@ def main():
                 continue
             if code != 200:
                 bad.append((f.name, raw, f"HTTP {code}"))
-    print(f"[服务] 端口在（{base} 根路径 {why}），逐条判引用。")
     print(f"本地引用去重后 {len(checked)} 条 URL。")
     if bad:
         print("死链：")
